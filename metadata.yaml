@@ -1,0 +1,6 @@
+name: storpool-block
+summary: Combine several layers to do... stuff.
+maintainer: StorPool <support@storpool.com>
+description: |
+  FIXME: write something about this.
+  This charm will one day install the StorPool block client and stuff
