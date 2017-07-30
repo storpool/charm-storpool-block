@@ -13,7 +13,7 @@ def rdebug(s):
 	with open('/tmp/storpool-charms.log', 'a') as f:
 		print('{tm} [block-charm] {s}'.format(tm=time.ctime(), s=s), file=f)
 
-@reactive.when('storpool-beacon.package-installed')
+@reactive.when('storpool-block.block-started')
 def whee():
 	rdebug('wheeeeeee')
 
