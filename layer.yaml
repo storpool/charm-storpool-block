@@ -1,1 +1,1 @@
-includes: ['layer:basic', 'layer:storpool-repo-add']
+includes: ['layer:basic', 'layer:storpool-repo-add', 'layer:storpool-config']
