@@ -1,1 +1,1 @@
-includes: ['layer:basic', 'layer:storpool-repo-add', 'layer:storpool-config', 'layer:storpool-block']
+includes: ['layer:basic', 'layer:storpool-repo-add', 'layer:storpool-config', 'layer:storpool-block', 'layer:storpool-openstack-integration']

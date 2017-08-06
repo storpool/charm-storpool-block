@@ -16,6 +16,7 @@ def rdebug(s):
 		print('{tm} [block-charm] {s}'.format(tm=time.ctime(), s=s), file=f)
 
 @reactive.when('storpool-block.block-started')
+@reactive.when('storpool-osi.installed-into-lxds')
 def whee():
 	rdebug('wheeeeeee')
 
