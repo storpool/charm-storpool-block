@@ -52,6 +52,9 @@ def whee():
 			return
 	rdebug('looks like the network interfaces check out')
 
+	"""
+	TODO: reenable at some point, but not on a flaky development cluster :)
+
 	hookenv.status_set('maintenance', 'trying to figure out which StorPool services are running')
 	out_b = subprocess.check_output(['storpool', '-Bj', 'service', 'list'])
 	out = json.loads(out_b.decode())
@@ -61,6 +64,7 @@ def whee():
 	cfg = spconfig.get_dict()
 	out_b = subprocess.check_output(['python2', '-c', 'from storpool import spapi; a = spapi.Api(host="{host}", port={port}, auth="{auth}"); print str.join(" ", map(str, sorted(a.disksList().keys())))'.format(host=cfg['SP_API_HTTP_HOST'], port=cfg['SP_API_HTTP_PORT'], auth=cfg['SP_AUTH_TOKEN'])])
 	rdebug('disks found: {disks}'.format(disks=out_b.decode().split('\n')[0]))
+	"""
 
 	hookenv.status_set('maintenance', 'trying to build a list of LXC objects')
 	lst = list(txn.LXD.list_all())
