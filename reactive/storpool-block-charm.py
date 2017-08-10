@@ -17,6 +17,7 @@ def rdebug(s):
 
 @reactive.when('storpool-block.block-started')
 @reactive.when('storpool-osi.installed-into-lxds')
+@reactive.when_not('storpool-block-charm.stopped')
 def whee():
 	rdebug('wheeeeeee')
 
@@ -75,3 +76,17 @@ def whee():
 		rdebug('- name "{name}" prefix "{prefix}"'.format(name=obj.name, prefix=obj.txn.prefix))
 
 	hookenv.status_set('active', 'so far so good so what')
+
+@reactive.hook('stop')
+def stop_and_propagate():
+	rdebug('a stop event was received')
+
+	rdebug('letting storpool-openstack-integration know')
+	reactive.set_state('storpool-osi.stop')
+	reactive.set_state('storpool-osi.no-propagate-stop')
+
+	rdebug('letting storpool-block know')
+	reactive.set_state('storpool-block.stop')
+
+	rdebug('done here, it seems')
+	reactive.set_state('storpool-block-charm.stopped')
