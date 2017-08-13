@@ -15,11 +15,26 @@ def rdebug(s):
 	with open('/tmp/storpool-charms.log', 'a') as f:
 		print('{tm} [block-charm] {s}'.format(tm=time.ctime(), s=s), file=f)
 
+@reactive.when_not('l-storpool-config.config-network')
+@reactive.when('storpool-config.available')
+@reactive.when_not('storpool-block-charm.stopped')
+def announce_no_config(hconfig):
+	rdebug('letting the other side know that we have no config yet')
+	hconfig.configure(None, rdebug=rdebug)
+
+@reactive.when('l-storpool-config.config-network')
+@reactive.when('storpool-config.available')
+@reactive.when_not('storpool-block-charm.stopped')
+def announce_no_config(hconfig):
+	rdebug('letting the other side know that we have some configuration now')
+	hconfig.configure({'config': hookenv.config()}, rdebug=rdebug)
+
 @reactive.when('storpool-block.block-started')
 @reactive.when('storpool-osi.installed-into-lxds')
 @reactive.when_not('storpool-block-charm.stopped')
 def whee():
 	rdebug('wheeeeeee')
+	hookenv.status_set('active', 'so far so good so what'); return
 
 	hookenv.status_set('maintenance', 'checking our storpool-repo-add installation')
 	policy = sprepo.apt_pkg_policy(['txn-install', 'storpool-config', 'meowmeow'])
