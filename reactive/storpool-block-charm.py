@@ -15,12 +15,28 @@ def rdebug(s):
 	with open('/tmp/storpool-charms.log', 'a') as f:
 		print('{tm} [block-charm] {s}'.format(tm=time.ctime(), s=s), file=f)
 
+def hook_debug(hc):
+	rdebug('hook information:')
+	try:
+		rdebug('- itself: {hc}'.format(hc=hc))
+		rdebug('- name: {name}'.format(name=hc.relation_name))
+		rdebug('- scope: {sc}'.format(sc=hc.scope))
+		rdebug('- conversations:')
+		for conv in hc.conversations():
+			rdebug('   - key: {key}'.format(key=conv.key))
+			rdebug('   - name: {name}'.format(name=conv.relation_name))
+			rdebug('   - ids: {ids}'.format(ids=conv.relation_ids))
+			rdebug('   - has config: {has}'.format(has=conv.get_local('storpool-config', None) is not None))
+	except Exception as e:
+		rdebug('could not examine the hook: {e}'.format(e=e))
+
 @reactive.when_not('l-storpool-config.config-network')
 @reactive.when('storpool-config.available')
 @reactive.when_not('storpool-block-charm.stopped')
 def announce_no_config(hconfig):
 	try:
 		rdebug('letting the other side know that we have no config yet')
+		hook_debug(hconfig)
 		hconfig.configure(None, rdebug=rdebug)
 	except Exception as e:
 		rdebug('could not announce the lack of configuration to the other side: {e}'.format(e=e))
@@ -31,7 +47,8 @@ def announce_no_config(hconfig):
 def announce_config(hconfig):
 	try:
 		rdebug('letting the other side know that we have some configuration now')
-		hconfig.configure({'config': hookenv.config()}, rdebug=rdebug)
+		hook_debug(hconfig)
+		hconfig.configure(hookenv.config()))
 	except Exception as e:
 		rdebug('could not announce the configuration to the other side: {e}'.format(e=e))
 
