@@ -19,15 +19,21 @@ def rdebug(s):
 @reactive.when('storpool-config.available')
 @reactive.when_not('storpool-block-charm.stopped')
 def announce_no_config(hconfig):
-	rdebug('letting the other side know that we have no config yet')
-	hconfig.configure(None, rdebug=rdebug)
+	try:
+		rdebug('letting the other side know that we have no config yet')
+		hconfig.configure(None, rdebug=rdebug)
+	except Exception as e:
+		rdebug('could not announce the lack of configuration to the other side: {e}'.format(e=e))
 
 @reactive.when('l-storpool-config.config-network')
 @reactive.when('storpool-config.available')
 @reactive.when_not('storpool-block-charm.stopped')
-def announce_no_config(hconfig):
-	rdebug('letting the other side know that we have some configuration now')
-	hconfig.configure({'config': hookenv.config()}, rdebug=rdebug)
+def announce_config(hconfig):
+	try:
+		rdebug('letting the other side know that we have some configuration now')
+		hconfig.configure({'config': hookenv.config()}, rdebug=rdebug)
+	except Exception as e:
+		rdebug('could not announce the configuration to the other side: {e}'.format(e=e))
 
 @reactive.when('storpool-block.block-started')
 @reactive.when('storpool-osi.installed-into-lxds')
