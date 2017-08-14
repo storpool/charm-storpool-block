@@ -9,6 +9,7 @@ from charmhelpers.core import hookenv
 
 from spcharms import repo as sprepo
 from spcharms import config as spconfig
+from spcharms import osi
 from spcharms import txn
 
 def rdebug(s):
@@ -48,7 +49,7 @@ def announce_config(hconfig):
 	try:
 		rdebug('letting the other side know that we have some configuration now')
 		hook_debug(hconfig)
-		hconfig.configure(hookenv.config()))
+		hconfig.configure(hookenv.config(), extra_hostname=osi.lxd_cinder_name())
 	except Exception as e:
 		rdebug('could not announce the configuration to the other side: {e}'.format(e=e))
 
