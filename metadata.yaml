@@ -4,6 +4,6 @@ maintainer: StorPool <support@storpool.com>
 description: |
   FIXME: write something about this.
   This charm will one day install the StorPool block client and stuff
-provides:
-  storpool-config:
-    interface: storpool-config
+peers:
+  block-p:
+    interface: storpool-service

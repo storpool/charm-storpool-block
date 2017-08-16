@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import json
+import platform
 import subprocess
 import time
 
@@ -10,6 +11,7 @@ from charmhelpers.core import hookenv
 from spcharms import repo as sprepo
 from spcharms import config as spconfig
 from spcharms import osi
+from spcharms import service_hook
 from spcharms import txn
 
 def rdebug(s):
@@ -30,6 +32,43 @@ def hook_debug(hc):
 			rdebug('   - has config: {has}'.format(has=conv.get_local('storpool-config', None) is not None))
 	except Exception as e:
 		rdebug('could not examine the hook: {e}'.format(e=e))
+
+@reactive.hook('leader-elected')
+def we_are_the_leader():
+	rdebug('looks like we have been elected leader')
+	reactive.set_state('storpool-block-charm.leader')
+
+@reactive.hook('leader-settings-changed')
+def we_are_not_the_leader():
+	rdebug('welp, we are not the leader')
+	reactive.remove_state('storpool-block-charm.leader')
+
+@reactive.hook('leader-deposed')
+def we_are_not_the_leader():
+	rdebug('welp, we have been deposed as leader')
+	reactive.remove_state('storpool-block-charm.leader')
+
+@reactive.when('storpool-service.change')
+@reactive.when('storpool-block-charm.leader')
+def peers_change():
+	rdebug('whee, got a storpool-service.change notification')
+	reactive.remove_state('storpool-service.change')
+
+	state = service_hook.get_present_nodes()
+	rdebug('got some state: {state}'.format(state=state))
+
+	# Let us make sure our own data is here
+	sp_node = platform.node()
+	if sp_node not in state:
+		rdebug('adding our own node {sp_node}'.format(sp_node=sp_node))
+		service_hook.add_present_node(sp_node, 'block-p')
+	lxd_cinder = osi.lxd_cinder_name()
+	if lxd_cinder is not None and lxd_cinder not in state:
+		rdebug('adding the Cinder LXD node {name}'.format(name=lxd_cinder))
+		service_hook.add_present_node(lxd_cinder, 'block-p')
+	rdebug('just for kicks, the current state: {state}'.format(state=service_hook.get_present_nodes()))
+
+	reactive.set_state('storpool-service.changed')
 
 @reactive.when_not('l-storpool-config.config-network')
 @reactive.when('storpool-config.available')
