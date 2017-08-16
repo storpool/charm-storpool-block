@@ -68,7 +68,21 @@ def peers_change():
 		service_hook.add_present_node(lxd_cinder, 'block-p')
 	rdebug('just for kicks, the current state: {state}'.format(state=service_hook.get_present_nodes()))
 
+	reactive.set_state('storpool-block-charm.announce-presence')
 	reactive.set_state('storpool-service.changed')
+
+@reactive.when('storpool-block-charm.announce-presence')
+@reactive.when('storpool-presence.notify')
+@reactive.when('storpool-block-charm.leader')
+def announce_peers(hk):
+	rdebug('about to announce our presence to the StorPool Cinder thing')
+	rel_ids = hookenv.relation_ids('storpool-presence')
+	rdebug('- got rel_ids {rel_ids}'.format(rel_ids=rel_ids))
+	for rel_id in rel_ids:
+		rdebug('  - trying for {rel_id}'.format(rel_id=rel_id))
+		hookenv.relation_set(rel_id, storpool_presence=json.dumps(service_hook.get_present_nodes()))
+		rdebug('  - done with {rel_id}'.format(rel_id=rel_ids))
+	rdebug('- done with the rel_ids')
 
 @reactive.when_not('l-storpool-config.config-network')
 @reactive.when('storpool-config.available')

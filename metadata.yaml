@@ -7,3 +7,6 @@ description: |
 peers:
   block-p:
     interface: storpool-service
+provides:
+  storpool-presence:
+    interface: storpool-presence
