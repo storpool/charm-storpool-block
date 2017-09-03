@@ -4,6 +4,7 @@ NAME?=		storpool-block
 SERIES?=	xenial
 
 SRCS=		\
+		icon.svg \
 		layer.yaml \
 		metadata.yaml \
 		\
