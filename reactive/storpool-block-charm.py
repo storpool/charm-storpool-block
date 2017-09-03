@@ -13,10 +13,10 @@ from spcharms import config as spconfig
 from spcharms import osi
 from spcharms import service_hook
 from spcharms import txn
+from spcharms import utils as sputils
 
 def rdebug(s):
-	with open('/tmp/storpool-charms.log', 'a') as f:
-		print('{tm} [block-charm] {s}'.format(tm=time.ctime(), s=s), file=f)
+	sputils.rdebug(s, prefix='block-charm')
 
 def hook_debug(hc):
 	rdebug('hook information:')
