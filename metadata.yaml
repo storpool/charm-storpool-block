@@ -4,9 +4,14 @@ maintainer: StorPool <support@storpool.com>
 description: |
   FIXME: write something about this.
   This charm will one day install the StorPool block client and stuff
+subordinate: true
 peers:
   block-p:
     interface: storpool-service
+requires:
+  juju-info:
+    interface: juju-info
+    scope: container
 provides:
   storpool-presence:
     interface: storpool-presence
