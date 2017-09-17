@@ -72,6 +72,7 @@ def peers_change():
 	reactive.set_state('storpool-service.changed')
 
 @reactive.when('storpool-block-charm.announce-presence')
+@reactive.when('storpool-block.block-started')
 @reactive.when('storpool-presence.notify')
 @reactive.when('storpool-block-charm.leader')
 def announce_peers(hk):
