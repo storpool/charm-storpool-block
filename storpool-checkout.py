@@ -73,8 +73,10 @@ if len(sys.argv) != 2:
 d = sys.argv[1]
 try:
 	os.chdir(d)
-except FileNotFoundError:
-	exit('The {d} directory does not seem to exist!'.format(d=d))
+except Exception as e:
+	if is_file_not_found(e):
+		exit('The {d} directory does not seem to exist!'.format(d=d))
+	raise
 
 print('Recreating the {subdir}/ tree'.format(subdir=subdir))
 subprocess.check_call(['rm', '-rf', '--', subdir])
