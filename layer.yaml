@@ -1,1 +1,2 @@
+repo: https://github.com/storpool/charm-storpool-block.git
 includes: ['layer:basic', 'layer:storpool-repo-add', 'layer:storpool-config', 'layer:storpool-block', 'layer:storpool-openstack-integration', 'layer:storpool-service', 'interface:storpool-service', 'interface:storpool-presence']
