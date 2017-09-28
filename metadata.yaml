@@ -1,9 +1,11 @@
 name: storpool-block
-summary: Combine several layers to do... stuff.
+summary: Combine several layers to install StorPool services
 maintainer: StorPool <support@storpool.com>
 description: |
-  FIXME: write something about this.
-  This charm will one day install the StorPool block client and stuff
+  This charm installs the StorPool block client (the initiator for
+  the StorPool distributed network storage service), along with
+  the StorPool OpenStack integration on the bare metal node and
+  possibly in all its LXD containers as configured.
 subordinate: true
 peers:
   block-p:
