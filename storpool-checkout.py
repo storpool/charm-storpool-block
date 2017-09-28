@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+from __future__ import print_function
+
 import os
 import re
 import requests
@@ -28,7 +30,7 @@ def is_file_not_found(e):
 	try:
 		return isinstance(e, FileNotFoundError)
 	except NameError:
-		return isinstance(e, IOError) and e.errno == os.errno.ENOENT
+		return (isinstance(e, IOError) or isinstance(e, OSError)) and e.errno == os.errno.ENOENT
 
 def checkout_recursive(name, layers_required=False):
 	checkout_repository(name)
