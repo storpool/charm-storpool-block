@@ -71,7 +71,7 @@ def checkout_charm_recursive(name):
 	print('')
 
 if len(sys.argv) != 2:
-	exit('Usage: storpool-checkout path/to/parent/dir\nExample: storpool-checkout .\nA {subdir} subdirectory will be created in the specified directory.'.format(subdir=subdir))
+	exit('Usage: storpool-charms path/to/parent/dir\nExample: storpool-charms .\nA {subdir} subdirectory will be created in the specified directory.'.format(subdir=subdir))
 d = sys.argv[1]
 try:
 	os.chdir(d)
