@@ -44,7 +44,7 @@ def we_are_not_the_leader():
 
 
 @reactive.hook('leader-deposed')
-def we_are_not_the_leader():
+def we_are_no_longer_the_leader():
     rdebug('welp, we have been deposed as leader')
     reactive.remove_state('storpool-block-charm.leader')
 
