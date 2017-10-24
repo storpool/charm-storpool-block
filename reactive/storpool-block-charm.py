@@ -15,8 +15,10 @@ from spcharms import service_hook
 from spcharms import txn
 from spcharms import utils as sputils
 
+
 def rdebug(s):
     sputils.rdebug(s, prefix='block-charm')
+
 
 def hook_debug(hc):
     rdebug('hook information:')
@@ -33,20 +35,24 @@ def hook_debug(hc):
     except Exception as e:
         rdebug('could not examine the hook: {e}'.format(e=e))
 
+
 @reactive.hook('leader-elected')
 def we_are_the_leader():
     rdebug('looks like we have been elected leader')
     reactive.set_state('storpool-block-charm.leader')
+
 
 @reactive.hook('leader-settings-changed')
 def we_are_not_the_leader():
     rdebug('welp, we are not the leader')
     reactive.remove_state('storpool-block-charm.leader')
 
+
 @reactive.hook('leader-deposed')
 def we_are_not_the_leader():
     rdebug('welp, we have been deposed as leader')
     reactive.remove_state('storpool-block-charm.leader')
+
 
 @reactive.when('storpool-service.change')
 @reactive.when('storpool-block-charm.leader')
@@ -71,6 +77,7 @@ def peers_change():
     reactive.set_state('storpool-block-charm.announce-presence')
     reactive.set_state('storpool-service.changed')
 
+
 @reactive.when('storpool-block-charm.announce-presence')
 @reactive.when('storpool-block.block-started')
 @reactive.when('storpool-presence.notify')
@@ -85,6 +92,7 @@ def announce_peers(hk):
         rdebug('  - done with {rel_id}'.format(rel_id=rel_ids))
     rdebug('- done with the rel_ids')
 
+
 @reactive.when_not('l-storpool-config.config-network')
 @reactive.when('storpool-config.available')
 @reactive.when_not('storpool-block-charm.stopped')
@@ -95,6 +103,7 @@ def announce_no_config(hconfig):
         hconfig.configure(None, rdebug=rdebug)
     except Exception as e:
         rdebug('could not announce the lack of configuration to the other side: {e}'.format(e=e))
+
 
 @reactive.when('l-storpool-config.config-network')
 @reactive.when('storpool-config.available')
@@ -107,12 +116,14 @@ def announce_config(hconfig):
     except Exception as e:
         rdebug('could not announce the configuration to the other side: {e}'.format(e=e))
 
+
 @reactive.when('storpool-block.block-started')
 @reactive.when('storpool-osi.installed-into-lxds')
 @reactive.when_not('storpool-block-charm.stopped')
 def ready():
     rdebug('ready to go')
     hookenv.status_set('active', 'so far so good so what')
+
 
 @reactive.hook('stop')
 def stop_and_propagate():
