@@ -2,17 +2,12 @@ from __future__ import print_function
 
 import json
 import platform
-import subprocess
-import time
 
 from charms import reactive
 from charmhelpers.core import hookenv
 
-from spcharms import repo as sprepo
-from spcharms import config as spconfig
 from spcharms import osi
 from spcharms import service_hook
-from spcharms import txn
 from spcharms import utils as sputils
 
 
