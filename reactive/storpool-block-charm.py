@@ -26,7 +26,8 @@ def hook_debug(hc):
             rdebug('   - key: {key}'.format(key=conv.key))
             rdebug('   - name: {name}'.format(name=conv.relation_name))
             rdebug('   - ids: {ids}'.format(ids=conv.relation_ids))
-            rdebug('   - has config: {has}'.format(has=conv.get_local('storpool-config', None) is not None))
+            rdebug('   - has config: {has}'.format(
+                has=conv.get_local('storpool-config', None) is not None))
     except Exception as e:
         rdebug('could not examine the hook: {e}'.format(e=e))
 
@@ -67,7 +68,8 @@ def peers_change():
     if lxd_cinder is not None and lxd_cinder not in state:
         rdebug('adding the Cinder LXD node {name}'.format(name=lxd_cinder))
         service_hook.add_present_node(lxd_cinder, 'block-p')
-    rdebug('just for kicks, the current state: {state}'.format(state=service_hook.get_present_nodes()))
+    rdebug('just for kicks, the current state: {state}'
+           .format(state=service_hook.get_present_nodes()))
 
     reactive.set_state('storpool-block-charm.announce-presence')
     reactive.set_state('storpool-service.changed')
@@ -83,7 +85,9 @@ def announce_peers(hk):
     rdebug('- got rel_ids {rel_ids}'.format(rel_ids=rel_ids))
     for rel_id in rel_ids:
         rdebug('  - trying for {rel_id}'.format(rel_id=rel_id))
-        hookenv.relation_set(rel_id, storpool_presence=json.dumps(service_hook.get_present_nodes()))
+        data = json.dumps(service_hook.get_present_nodes())
+        hookenv.relation_set(rel_id,
+                             storpool_presence=data)
         rdebug('  - done with {rel_id}'.format(rel_id=rel_ids))
     rdebug('- done with the rel_ids')
 
@@ -97,7 +101,7 @@ def announce_no_config(hconfig):
         hook_debug(hconfig)
         hconfig.configure(None, rdebug=rdebug)
     except Exception as e:
-        rdebug('could not announce the lack of configuration to the other side: {e}'.format(e=e))
+        rdebug('could not announce the lack of configuration: {e}'.format(e=e))
 
 
 @reactive.when('l-storpool-config.config-network')
@@ -105,11 +109,13 @@ def announce_no_config(hconfig):
 @reactive.when_not('storpool-block-charm.stopped')
 def announce_config(hconfig):
     try:
-        rdebug('letting the other side know that we have some configuration now')
+        rdebug('letting the other side know that we have some configuration')
         hook_debug(hconfig)
-        hconfig.configure(hookenv.config(), extra_hostname=osi.lxd_cinder_name())
+        hconfig.configure(hookenv.config(),
+                          extra_hostname=osi.lxd_cinder_name())
     except Exception as e:
-        rdebug('could not announce the configuration to the other side: {e}'.format(e=e))
+        rdebug('could not announce the configuration to the other side: {e}'
+               .format(e=e))
 
 
 @reactive.when('storpool-block.block-started')
