@@ -87,23 +87,36 @@ def peers_change():
     rdebug('whee, got a storpool-service.change notification')
     reactive.remove_state('storpool-service.change')
 
+    reactive.set_state('storpool-block-charm.announce-presence')
+    reactive.set_state('storpool-service.changed')
+
+
+def ensure_our_presence():
+    """
+    Make sure that our node and our Cinder container, if any, are
+    declared as present.
+    """
+    rdebug('about to make sure that we are represented in the presence data')
     state = service_hook.get_present_nodes()
     rdebug('got some state: {state}'.format(state=state))
 
     # Let us make sure our own data is here
+    changed = False
     sp_node = platform.node()
     if sp_node not in state:
         rdebug('adding our own node {sp_node}'.format(sp_node=sp_node))
         service_hook.add_present_node(sp_node, 'block-p')
+        changed = True
     lxd_cinder = osi.lxd_cinder_name()
     if lxd_cinder is not None and lxd_cinder not in state:
         rdebug('adding the Cinder LXD node {name}'.format(name=lxd_cinder))
         service_hook.add_present_node(lxd_cinder, 'block-p')
-    rdebug('just for kicks, the current state: {state}'
-           .format(state=service_hook.get_present_nodes()))
+        changed = True
 
-    reactive.set_state('storpool-block-charm.announce-presence')
-    reactive.set_state('storpool-service.changed')
+    if changed:
+        rdebug('something changed, will announce (if leader): {state}'
+               .format(state=service_hook.get_present_nodes()))
+        reactive.set_state('storpool-block-charm.announce-presence')
 
 
 @reactive.when('storpool-block-charm.announce-presence')
@@ -116,6 +129,9 @@ def announce_peers(hk):
     charms along the `storpool-presence` hook.
     """
     rdebug('about to announce our presence to the StorPool Cinder thing')
+    ensure_our_presence()
+    reactive.remove_state('storpool-block-charm.announce-presence')
+
     rel_ids = hookenv.relation_ids('storpool-presence')
     rdebug('- got rel_ids {rel_ids}'.format(rel_ids=rel_ids))
     for rel_id in rel_ids:
@@ -137,6 +153,7 @@ def ready():
     `active`.
     """
     rdebug('ready to go')
+    ensure_our_presence()
     hookenv.status_set('active', 'so far so good so what')
 
 
