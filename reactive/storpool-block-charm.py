@@ -35,27 +35,6 @@ def rdebug(s):
     sputils.rdebug(s, prefix='block-charm')
 
 
-def hook_debug(hc):
-    """
-    Log diagnostic information about the `hc` hook.
-    FIXME: remove this function as part of the `storpool-config` hook cleanup.
-    """
-    rdebug('hook information:')
-    try:
-        rdebug('- itself: {hc}'.format(hc=hc))
-        rdebug('- name: {name}'.format(name=hc.relation_name))
-        rdebug('- scope: {sc}'.format(sc=hc.scope))
-        rdebug('- conversations:')
-        for conv in hc.conversations():
-            rdebug('   - key: {key}'.format(key=conv.key))
-            rdebug('   - name: {name}'.format(name=conv.relation_name))
-            rdebug('   - ids: {ids}'.format(ids=conv.relation_ids))
-            rdebug('   - has config: {has}'.format(
-                has=conv.get_local('storpool-config', None) is not None))
-    except Exception as e:
-        rdebug('could not examine the hook: {e}'.format(e=e))
-
-
 @reactive.hook('leader-elected')
 def we_are_the_leader():
     """
@@ -134,38 +113,6 @@ def announce_peers(hk):
                              storpool_presence=data)
         rdebug('  - done with {rel_id}'.format(rel_id=rel_ids))
     rdebug('- done with the rel_ids')
-
-
-@reactive.when_not('l-storpool-config.config-network')
-@reactive.when('storpool-config.available')
-@reactive.when_not('storpool-block-charm.stopped')
-def announce_no_config(hconfig):
-    """
-    FIXME: remove this function; the `storpool-config` hook was removed.
-    """
-    try:
-        rdebug('letting the other side know that we have no config yet')
-        hook_debug(hconfig)
-        hconfig.configure(None, rdebug=rdebug)
-    except Exception as e:
-        rdebug('could not announce the lack of configuration: {e}'.format(e=e))
-
-
-@reactive.when('l-storpool-config.config-network')
-@reactive.when('storpool-config.available')
-@reactive.when_not('storpool-block-charm.stopped')
-def announce_config(hconfig):
-    """
-    FIXME: remove this function; the `storpool-config` hook was removed.
-    """
-    try:
-        rdebug('letting the other side know that we have some configuration')
-        hook_debug(hconfig)
-        hconfig.configure(hookenv.config(),
-                          extra_hostname=osi.lxd_cinder_name())
-    except Exception as e:
-        rdebug('could not announce the configuration to the other side: {e}'
-               .format(e=e))
 
 
 @reactive.when('storpool-block.block-started')
