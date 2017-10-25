@@ -42,6 +42,18 @@ def we_are_the_leader():
     the `storpool-block` charm.  This will prompt the unit to send presence
     information to the other charms along the `storpool-presence` hook.
     """
+    rdebug('have we really been elected leader?')
+    if not hookenv.is_leader():
+        rdebug('false alarm...')
+        reactive.remove_state('storpool-block-charm.leader')
+        return
+    rdebug('but really?')
+    try:
+        hookenv.leader_set(charm_storpool_block_unit=platform.node())
+    except Exception as e:
+        rdebug('no, could not run leader_set: {e}'.format(e=e))
+        reactive.remove_state('storpool-block-charm.leader')
+        return
     rdebug('looks like we have been elected leader')
     reactive.set_state('storpool-block-charm.leader')
 
