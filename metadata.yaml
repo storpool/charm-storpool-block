@@ -6,6 +6,9 @@ description: |
   the StorPool distributed network storage service), along with
   the StorPool OpenStack integration on the bare metal node and
   possibly in all its LXD containers as configured.
+tags:
+  - openstack
+  - storage
 subordinate: true
 peers:
   block-p:
