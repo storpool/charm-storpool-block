@@ -25,6 +25,7 @@ from charmhelpers.core import hookenv
 
 from spcharms import osi
 from spcharms import service_hook
+from spcharms import status as spstatus
 from spcharms import utils as sputils
 
 
@@ -154,7 +155,7 @@ def ready():
     """
     rdebug('ready to go')
     ensure_our_presence()
-    hookenv.status_set('active', 'so far so good so what')
+    spstatus.set('active', 'so far so good so what')
 
 
 @reactive.hook('stop')
