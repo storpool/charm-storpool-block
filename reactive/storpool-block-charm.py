@@ -36,6 +36,24 @@ def rdebug(s):
     sputils.rdebug(s, prefix='block-charm')
 
 
+@reactive.hook('install')
+def install_setup():
+    """
+    Note that the storpool-repo-add layer should reset the status error
+    messages on "config-changed" and "upgrade-charm" hooks.
+    """
+    spstatus.set_status_reset_handler('storpool-repo-add')
+
+
+@reactive.hook('upgrade-charm')
+def upgrade_setup():
+    """
+    Note that the storpool-repo-add layer should reset the status error
+    messages on "config-changed" and "upgrade-charm" hooks.
+    """
+    spstatus.set_status_reset_handler('storpool-repo-add')
+
+
 @reactive.hook('leader-elected')
 def we_are_the_leader():
     """
