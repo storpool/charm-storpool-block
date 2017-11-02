@@ -1,1 +1,5 @@
 flake8
+os-testr
+mock
+charmhelpers
+charms.reactive
