@@ -7,7 +7,7 @@ A set of unit tests for the storpool-block charm.
 import os
 import platform
 import sys
-import testtools
+import unittest
 
 import mock
 
@@ -122,7 +122,7 @@ LEADER_STATE = 'storpool-block-charm.leader'
 PRESENCE_STATE = 'storpool-block-charm.announce-presence'
 
 
-class TestStorPoolBlock(testtools.TestCase):
+class TestStorPoolBlock(unittest.TestCase):
     def setUp(self):
         super(TestStorPoolBlock, self).setUp()
         r_state.r_clear_states()
