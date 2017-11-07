@@ -68,7 +68,7 @@ def we_are_the_leader():
         return
     rdebug('but really?')
     try:
-        hookenv.leader_set(charm_storpool_block_unit=platform.node())
+        hookenv.leader_set(charm_storpool_block_unit=sputils.get_machine_id())
     except Exception as e:
         rdebug('no, could not run leader_set: {e}'.format(e=e))
         reactive.remove_state('storpool-block-charm.leader')

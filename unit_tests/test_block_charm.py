@@ -25,6 +25,7 @@ if lib_path not in sys.path:
 from spcharms import osi
 from spcharms import service_hook as spservice
 from spcharms import status as spstatus
+from spcharms import utils as sputils
 
 
 class MockReactive(object):
@@ -193,7 +194,7 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(is_leader_call_count + 3, h_is_leader.call_count)
         self.assertEquals(leader_set_call_count + 2, h_leader_set.call_count)
         self.assertEquals((), self.lset_args)
-        self.assertEquals({'charm_storpool_block_unit': platform.node()},
+        self.assertEquals({'charm_storpool_block_unit': sputils.MACHINE_ID},
                           self.lset_kwargs)
 
         r_state.r_set_states(states)

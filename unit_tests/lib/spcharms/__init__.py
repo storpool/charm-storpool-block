@@ -90,6 +90,8 @@ class SPServiceHook(object):
 
 repo = mock.Mock()
 utils = mock.Mock()
+utils.MACHINE_ID = '42'
+utils.get_machine_id.return_value = utils.MACHINE_ID
 
 osi = SPOpenStackIntegration()
 service_hook = SPServiceHook()
