@@ -5,7 +5,6 @@ A set of unit tests for the storpool-block charm.
 """
 
 import os
-import platform
 import sys
 import unittest
 
@@ -215,7 +214,7 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(no_announce.union(set([PRESENCE_STATE])),
                           do_announce)
 
-        sp_node = platform.node()
+        sp_node = sputils.get_machine_id()
         lxd_container = 'juju-' + sp_node + '-lxd'
         other_nodes = set(['not-' + sp_node, 'neither-' + sp_node])
         with_ours = other_nodes.union(set([sp_node]))

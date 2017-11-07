@@ -18,7 +18,6 @@ Internal hooks:
 from __future__ import print_function
 
 import json
-import platform
 
 from charms import reactive
 from charmhelpers.core import hookenv
@@ -121,7 +120,7 @@ def ensure_our_presence():
 
     # Let us make sure our own data is here
     changed = False
-    sp_node = platform.node()
+    sp_node = sputils.get_machine_id()
     if sp_node not in state:
         rdebug('adding our own node {sp_node}'.format(sp_node=sp_node))
         service_hook.add_present_node(sp_node, 'block-p')
