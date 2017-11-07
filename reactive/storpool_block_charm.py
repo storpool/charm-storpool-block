@@ -150,11 +150,17 @@ def announce_peers(hk):
     ensure_our_presence()
     reactive.remove_state('storpool-block-charm.announce-presence')
 
+    cfg = hookenv.config()
     rel_ids = hookenv.relation_ids('storpool-presence')
     rdebug('- got rel_ids {rel_ids}'.format(rel_ids=rel_ids))
     for rel_id in rel_ids:
         rdebug('  - trying for {rel_id}'.format(rel_id=rel_id))
-        data = json.dumps(service_hook.get_present_nodes())
+        data = json.dumps({
+            'presence': service_hook.get_present_nodes(),
+            'storpool_conf': cfg['storpool_conf'],
+            'storpool_version': cfg['storpool_version'],
+            'storpool_openstack_version': cfg['storpool_openstack_version'],
+        })
         hookenv.relation_set(rel_id,
                              storpool_presence=data)
         rdebug('  - done with {rel_id}'.format(rel_id=rel_ids))
