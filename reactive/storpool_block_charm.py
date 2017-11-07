@@ -22,6 +22,7 @@ import json
 from charms import reactive
 from charmhelpers.core import hookenv
 
+from spcharms import config as spconfig
 from spcharms import osi
 from spcharms import service_hook
 from spcharms import status as spstatus
@@ -121,14 +122,15 @@ def ensure_our_presence():
     # Let us make sure our own data is here
     changed = False
     sp_node = sputils.get_machine_id()
+    oid = spconfig.get_our_id()
     if sp_node not in state:
         rdebug('adding our own node {sp_node}'.format(sp_node=sp_node))
-        service_hook.add_present_node(sp_node, 'block-p')
+        service_hook.add_present_node(sp_node, oid, 'block-p')
         changed = True
     lxd_cinder = osi.lxd_cinder_name()
     if lxd_cinder is not None and lxd_cinder not in state:
         rdebug('adding the Cinder LXD node {name}'.format(name=lxd_cinder))
-        service_hook.add_present_node(lxd_cinder, 'block-p')
+        service_hook.add_present_node(lxd_cinder, oid, 'block-p')
         changed = True
 
     if changed:

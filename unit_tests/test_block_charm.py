@@ -216,10 +216,22 @@ class TestStorPoolBlock(unittest.TestCase):
 
         sp_node = sputils.get_machine_id()
         lxd_container = 'juju-' + sp_node + '-lxd'
-        other_nodes = set(['not-' + sp_node, 'neither-' + sp_node])
-        with_ours = other_nodes.union(set([sp_node]))
-        just_container = other_nodes.union(set([lxd_container]))
-        full_set = with_ours.union(set([lxd_container]))
+        other_nodes = {
+            'not-' + sp_node: '17',
+            'neither-' + sp_node: '18',
+        }
+        with_ours = {
+            **other_nodes,
+            sp_node: '16',
+        }
+        just_container = {
+            **other_nodes,
+            lxd_container: '16',
+        }
+        full_set = {
+            **with_ours,
+            lxd_container: '16',
+        }
 
         # No change if our node is there and there is no Cinder container.
         r_state.r_set_states(no_announce)

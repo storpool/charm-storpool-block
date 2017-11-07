@@ -57,7 +57,7 @@ class SPServiceHook(object):
         """
         Initialize a service hook object with no presence data.
         """
-        self.data = set()
+        self.data = dict()
         self.relation_name = None
 
     def r_get_relation_name(self):
@@ -77,17 +77,19 @@ class SPServiceHook(object):
         """
         Get the nodes presence data.
         """
-        return set(self.data)
+        return dict(self.data)
 
-    def add_present_node(self, node, rel_name):
+    def add_present_node(self, node, value, rel_name):
         """
         Add a node to the presence data, simulate sending it along
         the specified relation.
         """
-        self.data.add(node)
+        self.data[node] = value
         self.relation_name = rel_name
 
 
+config = mock.Mock()
+config.get_our_id.return_value = '16'
 repo = mock.Mock()
 utils = mock.Mock()
 utils.MACHINE_ID = '42'
