@@ -21,7 +21,6 @@ if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
 
-from spcharms import osi
 from spcharms import service_hook as spservice
 from spcharms import status as spstatus
 from spcharms import utils as sputils
@@ -219,7 +218,6 @@ class TestStorPoolBlock(unittest.TestCase):
                           do_announce)
 
         sp_node = sputils.get_machine_id()
-        lxd_container = 'juju-' + sp_node + '-lxd'
         other_nodes = {
             'not-' + sp_node: '17',
             'neither-' + sp_node: '18',
@@ -228,62 +226,20 @@ class TestStorPoolBlock(unittest.TestCase):
             **other_nodes,
             sp_node: '16',
         }
-        just_container = {
-            **other_nodes,
-            lxd_container: '16',
-        }
-        full_set = {
-            **with_ours,
-            lxd_container: '16',
-        }
 
-        # No change if our node is there and there is no Cinder container.
+        # No change if our node is there.
         r_state.r_set_states(no_announce)
         spservice.r_set_present_nodes(with_ours)
-        osi.r_set_lxd_cinder_name(None)
         testee.ensure_our_presence()
         self.assertEquals(no_announce, r_state.r_get_states())
         self.assertEquals(with_ours, spservice.get_present_nodes())
 
-        # No change if both our node and the Cinder container are there.
-        r_state.r_set_states(no_announce)
-        spservice.r_set_present_nodes(full_set)
-        osi.r_set_lxd_cinder_name(lxd_container)
-        testee.ensure_our_presence()
-        self.assertEquals(no_announce, r_state.r_get_states())
-        self.assertEquals(full_set, spservice.get_present_nodes())
-
-        # Add just our node if it's not there and there is no container.
+        # Add just our node if it's not there.
         r_state.r_set_states(no_announce)
         spservice.r_set_present_nodes(other_nodes)
-        osi.r_set_lxd_cinder_name(None)
         testee.ensure_our_presence()
         self.assertEquals(do_announce, r_state.r_get_states())
         self.assertEquals(with_ours, spservice.get_present_nodes())
-
-        # Add the Cinder container if it's not there.
-        r_state.r_set_states(no_announce)
-        spservice.r_set_present_nodes(with_ours)
-        osi.r_set_lxd_cinder_name(lxd_container)
-        testee.ensure_our_presence()
-        self.assertEquals(do_announce, r_state.r_get_states())
-        self.assertEquals(full_set, spservice.get_present_nodes())
-
-        # Add both our node and the Cinder container if neither is there.
-        r_state.r_set_states(no_announce)
-        spservice.r_set_present_nodes(other_nodes)
-        osi.r_set_lxd_cinder_name(lxd_container)
-        testee.ensure_our_presence()
-        self.assertEquals(do_announce, r_state.r_get_states())
-        self.assertEquals(full_set, spservice.get_present_nodes())
-
-        # Add just our node if it's not there, but the Cinder container is.
-        r_state.r_set_states(no_announce)
-        spservice.r_set_present_nodes(just_container)
-        osi.r_set_lxd_cinder_name(lxd_container)
-        testee.ensure_our_presence()
-        self.assertEquals(do_announce, r_state.r_get_states())
-        self.assertEquals(full_set, spservice.get_present_nodes())
 
         r_state.r_set_states(states)
         spservice.r_set_present_nodes(presence)

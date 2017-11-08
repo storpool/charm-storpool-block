@@ -23,7 +23,6 @@ from charms import reactive
 from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
-from spcharms import osi
 from spcharms import service_hook
 from spcharms import status as spstatus
 from spcharms import utils as sputils
@@ -116,28 +115,18 @@ def peers_change():
 
 def ensure_our_presence():
     """
-    Make sure that our node and our Cinder container, if any, are
-    declared as present.
+    Make sure that our node is declared as present.
     """
     rdebug('about to make sure that we are represented in the presence data')
     state = service_hook.get_present_nodes()
     rdebug('got some state: {state}'.format(state=state))
 
     # Let us make sure our own data is here
-    changed = False
     sp_node = sputils.get_machine_id()
     oid = spconfig.get_our_id()
     if sp_node not in state:
         rdebug('adding our own node {sp_node}'.format(sp_node=sp_node))
         service_hook.add_present_node(sp_node, oid, 'block-p')
-        changed = True
-    lxd_cinder = osi.lxd_cinder_name()
-    if lxd_cinder is not None and lxd_cinder not in state:
-        rdebug('adding the Cinder LXD node {name}'.format(name=lxd_cinder))
-        service_hook.add_present_node(lxd_cinder, oid, 'block-p')
-        changed = True
-
-    if changed:
         rdebug('something changed, will announce (if leader): {state}'
                .format(state=service_hook.get_present_nodes()))
         reactive.set_state('storpool-block-charm.announce-presence')

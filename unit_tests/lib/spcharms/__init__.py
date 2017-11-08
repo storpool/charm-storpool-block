@@ -26,29 +26,6 @@ class SPStatus(object):
         self.status_reset_handler = name
 
 
-class SPOpenStackIntegration(object):
-    """
-    Simulate the OpenStack Cinder container name helper.
-    """
-    def __init__(self, cinder_name=None):
-        """
-        Initialize an object: nothing really.
-        """
-        self.cinder_name = cinder_name
-
-    def lxd_cinder_name(self):
-        """
-        Return the name of the Cinder container found.
-        """
-        return self.cinder_name
-
-    def r_set_lxd_cinder_name(self, name):
-        """
-        For testing purposes, set the Cinder container name.
-        """
-        self.cinder_name = name
-
-
 class SPServiceHook(object):
     """
     Simulate the service-hook layer and interface.
@@ -95,6 +72,5 @@ utils = mock.Mock()
 utils.MACHINE_ID = '42'
 utils.get_machine_id.return_value = utils.MACHINE_ID
 
-osi = SPOpenStackIntegration()
 service_hook = SPServiceHook()
 status = SPStatus()
