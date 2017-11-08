@@ -67,7 +67,9 @@ class SPServiceHook(object):
 
 config = mock.Mock()
 config.get_our_id.return_value = '16'
+osi = mock.Mock()
 repo = mock.Mock()
+txn = mock.Mock()
 utils = mock.Mock()
 utils.MACHINE_ID = '42'
 utils.get_machine_id.return_value = utils.MACHINE_ID
