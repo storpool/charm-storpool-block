@@ -53,6 +53,10 @@ def upgrade_setup():
     """
     spstatus.set_status_reset_handler('storpool-repo-add')
 
+    # Make sure we announce our presence again if necessary and
+    # when possible
+    reactive.set_state('storpool-block-charm.announce-presence')
+
 
 @reactive.hook('leader-elected')
 def we_are_the_leader():

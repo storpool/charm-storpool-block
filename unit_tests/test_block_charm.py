@@ -129,14 +129,18 @@ class TestStorPoolBlock(unittest.TestCase):
         r_config.r_clear_config()
         spstatus.set_status_reset_handler(None)
 
-    def do_test_hook_install(self, tested_function):
+    def do_test_hook_install(self, tested_function, is_upgrade):
         """
         Test the install hook: set the status reset handler, change nothing.
         """
         states = r_state.r_get_states()
         tested_function()
         self.assertEquals('storpool-repo-add', spstatus.status_reset_handler)
-        self.assertEquals(states, r_state.r_get_states())
+        if is_upgrade:
+            self.assertEquals(states.union(set([PRESENCE_STATE])),
+                              r_state.r_get_states())
+        else:
+            self.assertEquals(states, r_state.r_get_states())
 
     def do_test_we_are_the_leader(self, h_is_leader, h_leader_set):
         """
@@ -289,14 +293,14 @@ class TestStorPoolBlock(unittest.TestCase):
         """
         Run the test for the install hook.
         """
-        self.do_test_hook_install(testee.install_setup)
+        self.do_test_hook_install(testee.install_setup, False)
 
     @mock_reactive_states
     def test_hook_upgrade(self):
         """
         Run the test for the install hook.
         """
-        self.do_test_hook_install(testee.upgrade_setup)
+        self.do_test_hook_install(testee.upgrade_setup, True)
 
     @mock_reactive_states
     @mock.patch('charmhelpers.core.hookenv.leader_set')
@@ -321,7 +325,7 @@ class TestStorPoolBlock(unittest.TestCase):
         """
         Test the full lifecycle of the storpool-block charm.
         """
-        self.do_test_hook_install(testee.install_setup)
-        self.do_test_hook_install(testee.upgrade_setup)
+        self.do_test_hook_install(testee.install_setup, False)
+        self.do_test_hook_install(testee.upgrade_setup, True)
         self.do_test_we_are_the_leader(h_is_leader, h_leader_set)
         self.do_test_ensure_our_presence()
