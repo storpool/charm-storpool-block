@@ -174,7 +174,7 @@ def announce_peers(hk):
 
 
 @reactive.when('storpool-block.block-started')
-@reactive.when('storpool-osi.installed-into-lxds')
+@reactive.when('storpool-osi.installed')
 @reactive.when_not('storpool-block-charm.stopped')
 def ready():
     """
