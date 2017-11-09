@@ -68,6 +68,9 @@ def config_changed():
     """
     spstates.handle_event('upgrade-charm')
 
+    # If anything changed in the configuration...
+    reactive.set_state('storpool-block-charm.announce-presence')
+
 
 @reactive.hook('upgrade-charm')
 def upgrade_setup():
