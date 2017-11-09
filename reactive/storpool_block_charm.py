@@ -57,6 +57,7 @@ def install_setup():
     Note that the storpool-repo-add layer should reset the status error
     messages on "config-changed" and "upgrade-charm" hooks.
     """
+    spconfig.set_meta_config(None)
     spstatus.set_status_reset_handler('storpool-repo-add')
 
 
