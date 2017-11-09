@@ -181,6 +181,7 @@ def announce_peers(hk):
         data = json.dumps({
             'presence': service_hook.get_present_nodes(),
             'storpool_conf': cfg['storpool_conf'],
+            'storpool_repo_url': cfg['storpool_repo_url'],
             'storpool_version': cfg['storpool_version'],
             'storpool_openstack_version': cfg['storpool_openstack_version'],
         })
