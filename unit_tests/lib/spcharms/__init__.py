@@ -69,6 +69,7 @@ config = mock.Mock()
 config.get_our_id.return_value = '16'
 osi = mock.Mock()
 repo = mock.Mock()
+states = mock.Mock()
 txn = mock.Mock()
 utils = mock.Mock()
 utils.MACHINE_ID = '42'

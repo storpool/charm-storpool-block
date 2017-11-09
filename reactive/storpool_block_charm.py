@@ -30,6 +30,7 @@ from spcharms import config as spconfig
 from spcharms import osi
 from spcharms import service_hook
 from spcharms import txn
+from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import utils as sputils
 
@@ -59,6 +60,14 @@ def install_setup():
     spstatus.set_status_reset_handler('storpool-repo-add')
 
 
+@reactive.hook('config-changed')
+def config_changed():
+    """
+    Fire any handlers necessary.
+    """
+    spstates.handle_event('upgrade-charm')
+
+
 @reactive.hook('upgrade-charm')
 def upgrade_setup():
     """
@@ -70,6 +79,9 @@ def upgrade_setup():
     # Make sure we announce our presence again if necessary and
     # when possible
     reactive.set_state('storpool-block-charm.announce-presence')
+
+    # Also, fire state handlers as necessary.
+    spstates.handle_event('upgrade-charm')
 
 
 @reactive.hook('leader-elected')
