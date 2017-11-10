@@ -163,6 +163,19 @@ def ensure_our_presence():
         reactive.set_state('storpool-block-charm.announce-presence')
 
 
+@reactive.when_not('storpool-block-charm.announce-presence')
+@reactive.when('storpool-block.block-started')
+@reactive.when('storpool-presence.notify-joined')
+@reactive.when('storpool-block-charm.leader')
+def announce_to_new_peers(hk):
+    """
+    Somebody just came in, give them the news...
+    """
+    rdebug('letting the new guy know... maybe')
+    reactive.set_state('storpool-block-charm.announce-presence')
+    reactive.remove_state('storpool-presence.notify-joined')
+
+
 @reactive.when('storpool-block-charm.announce-presence')
 @reactive.when('storpool-block.block-started')
 @reactive.when('storpool-presence.notify')
