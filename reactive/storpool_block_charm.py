@@ -261,7 +261,6 @@ def create_block_conffile(hk):
 
     # Now is there actually an LXD container by that name here?
     lxc_text = sputils.exec(['lxc', 'list', '--format=json'])
-    rdebug('RDBG lxc_text is {text}'.format(text=lxc_text))
     if lxc_text['res'] != 0:
         rdebug('no LXC containers at all here')
         remove_block_conffile(confname)
