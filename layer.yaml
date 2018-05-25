@@ -1,3 +1,3 @@
 repo: https://github.com/storpool/charm-storpool-block.git
-includes: ['layer:basic', 'layer:storpool-config', 'layer:storpool-block', 'layer:storpool-openstack-integration', 'interface:storpool-service', 'interface:storpool-presence']
+includes: ['layer:basic', 'layer:storpool-common', 'layer:storpool-block', 'layer:storpool-openstack-integration', 'interface:storpool-service', 'interface:storpool-presence']
 exclude: ['unit_tests']
