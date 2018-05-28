@@ -378,10 +378,6 @@ def stop_and_propagate():
     """
     rdebug('a stop event was received')
 
-    rdebug('letting storpool-openstack-integration know')
-    reactive.set_state('storpool-osi.stop')
-    reactive.set_state('storpool-osi.no-propagate-stop')
-
     rdebug('letting storpool-block know')
     reactive.set_state('storpool-block.stop')
 
