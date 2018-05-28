@@ -65,11 +65,19 @@ class SPServiceHook(object):
         self.relation_name = rel_name
 
 
+class FunnyException(Exception):
+    pass
+
+
 config = mock.Mock()
 config.get_our_id.return_value = '16'
+error = mock.Mock()
+error.StorPoolNoConfigException = FunnyException
+error.StorPoolPackageInstallException = FunnyException
+error.StorPoolNoCGroupsException = FunnyException
+error.StorPoolException = FunnyException
 osi = mock.Mock()
 repo = mock.Mock()
-states = mock.Mock()
 txn = mock.Mock()
 utils = mock.Mock()
 utils.MACHINE_ID = '42'
@@ -77,3 +85,4 @@ utils.get_machine_id.return_value = utils.MACHINE_ID
 
 service_hook = SPServiceHook()
 status = SPStatus()
+status.set = mock.Mock()

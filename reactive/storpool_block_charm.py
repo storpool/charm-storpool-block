@@ -27,12 +27,14 @@ from charms import reactive
 from charmhelpers.core import hookenv, host
 
 from spcharms import config as spconfig
+from spcharms import error as sperror
 from spcharms import osi
 from spcharms import service_hook
 from spcharms import txn
-from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import utils as sputils
+
+from spcharms.run import storpool_block as run_block
 
 
 def block_conffile():
@@ -59,14 +61,15 @@ def install_setup():
     """
     spconfig.set_meta_config(None)
     spstatus.set_status_reset_handler('storpool-repo-add')
+    run()
 
 
 @reactive.hook('config-changed')
 def config_changed():
     """
-    Fire any handlers necessary.
+    Try to (re-)install everything.
     """
-    spstates.handle_event('upgrade-charm')
+    run()
 
     # If anything changed in the configuration...
     reactive.set_state('storpool-block-charm.announce-presence')
@@ -84,8 +87,8 @@ def upgrade_setup():
     # when possible
     reactive.set_state('storpool-block-charm.announce-presence')
 
-    # Also, fire state handlers as necessary.
-    spstates.handle_event('upgrade-charm')
+    # Try to (re-)install everything.
+    run()
 
 
 @reactive.hook('leader-elected')
@@ -164,7 +167,7 @@ def ensure_our_presence():
 
 
 @reactive.when_not('storpool-block-charm.announce-presence')
-@reactive.when('storpool-block.block-started')
+@reactive.when('storpool-block-charm.services-started')
 @reactive.when('storpool-presence.notify-joined')
 @reactive.when('storpool-block-charm.leader')
 def announce_to_new_peers(hk):
@@ -177,7 +180,7 @@ def announce_to_new_peers(hk):
 
 
 @reactive.when('storpool-block-charm.announce-presence')
-@reactive.when('storpool-block.block-started')
+@reactive.when('storpool-block-charm.services-started')
 @reactive.when('storpool-presence.notify')
 @reactive.when('storpool-block-charm.leader')
 def announce_peers(hk):
@@ -352,9 +355,6 @@ def create_block_conffile(hk):
                .format(confname=confname, name=lxc_name, e=e))
 
 
-@reactive.when('storpool-block.block-started')
-@reactive.when('storpool-osi.installed')
-@reactive.when_not('storpool-block-charm.stopped')
 def ready():
     """
     When the StorPool block service has been installed and the OpenStack
@@ -364,6 +364,28 @@ def ready():
     rdebug('ready to go')
     ensure_our_presence()
     spstatus.set('active', 'so far so good so what')
+
+
+def run():
+    try:
+        reactive.remove_state('storpool-block-charm.services-started')
+        rdebug('Run, block, run!')
+        run_block.run()
+        reactive.set_state('storpool-block-charm.services-started')
+        rdebug('It seems that the storpool-block setup has run its course')
+        ready()
+    except sperror.StorPoolNoConfigException as e_cfg:
+        hookenv.log('StorPool: missing configuration: {m}'
+                    .format(m=', '.join(e_cfg.missing)),
+                    hookenv.INFO)
+    except sperror.StorPoolPackageInstallException as e_pkg:
+        hookenv.log('StorPool: could not install the {names} packages: {e}'
+                    .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
+                    hookenv.ERROR)
+    except sperror.StorPoolNoCGroupsException as e_cfg:
+        hookenv.log('StorPool: {e}'.format(e=e_cfg), hookenv.ERROR)
+    except sperror.StorPoolException as e:
+        hookenv.log('StorPool installation problem: {e}'.format(e=e))
 
 
 @reactive.hook('stop')
@@ -379,7 +401,7 @@ def stop_and_propagate():
     rdebug('a stop event was received')
 
     rdebug('letting storpool-block know')
-    reactive.set_state('storpool-block.stop')
+    run_block.stop()
 
     rdebug('done here, it seems')
     reactive.set_state('storpool-block-charm.stopped')
