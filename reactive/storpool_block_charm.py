@@ -24,17 +24,20 @@ import subprocess
 import tempfile
 
 from charms import reactive
-from charmhelpers.core import hookenv, host
+from charmhelpers.core import hookenv, host, unitdata
 
 from spcharms import config as spconfig
 from spcharms import error as sperror
-from spcharms import osi
+from spcharms import kvdata
 from spcharms import service_hook
 from spcharms import txn
 from spcharms import status as spstatus
 from spcharms import utils as sputils
 
 from spcharms.run import storpool_block as run_block
+
+
+RELATIONS = ['block-p', 'storpool-presence']
 
 
 def block_conffile():
@@ -46,11 +49,11 @@ def block_conffile():
     return '/etc/storpool.conf.d/storpool-cinder-block.conf'
 
 
-def rdebug(s):
+def rdebug(s, cond=None):
     """
     Pass the diagnostic message string `s` to the central diagnostic logger.
     """
-    sputils.rdebug(s, prefix='block-charm')
+    sputils.rdebug(s, prefix='block-charm', cond=cond)
 
 
 @reactive.hook('install')
@@ -67,27 +70,18 @@ def install_setup():
 @reactive.hook('config-changed')
 def config_changed():
     """
-    Try to (re-)install everything.
+    Try to (re-)install everything and re-announce.
     """
+    if reactive.is_state('storpool-block-charm.leader'):
+        reactive.set_state('storpool-block-charm.bump-generation')
     run()
-
-    # If anything changed in the configuration...
-    reactive.set_state('storpool-block-charm.announce-presence')
 
 
 @reactive.hook('upgrade-charm')
 def upgrade_setup():
     """
-    Note that the storpool-repo-add layer should reset the status error
-    messages on "config-changed" and "upgrade-charm" hooks.
+    Try to (re-)install everything and re-announce.
     """
-    spstatus.set_status_reset_handler('storpool-repo-add')
-
-    # Make sure we announce our presence again if necessary and
-    # when possible
-    reactive.set_state('storpool-block-charm.announce-presence')
-
-    # Try to (re-)install everything.
     run()
 
 
@@ -142,80 +136,123 @@ def we_are_no_longer_the_leader():
     reactive.remove_state('storpool-block-charm.leader')
 
 
-@reactive.when('storpool-service.change')
-@reactive.when('storpool-block-charm.leader')
-def peers_change():
-    """
-    Handle a presence data change reported along the internal `block-p` hook.
-    """
-    rdebug('whee, got a storpool-service.change notification')
-    reactive.remove_state('storpool-service.change')
-
-    reactive.set_state('storpool-block-charm.announce-presence')
-    reactive.set_state('storpool-service.changed')
-
-
-def ensure_our_presence():
-    """
-    Make sure that our node is declared as present.
-    """
-    rdebug('about to make sure that we are represented in the presence data')
-    state = service_hook.get_present_nodes()
-    rdebug('got some state: {state}'.format(state=state))
-
-    # Let us make sure our own data is here
-    sp_node = sputils.get_machine_id()
-    oid = spconfig.get_our_id()
-    if sp_node not in state:
-        rdebug('adding our own node {sp_node}'.format(sp_node=sp_node))
-        service_hook.add_present_node(sp_node, oid, 'block-p')
-        rdebug('something changed, will announce (if leader): {state}'
-               .format(state=service_hook.get_present_nodes()))
-        reactive.set_state('storpool-block-charm.announce-presence')
-
-
-@reactive.when_not('storpool-block-charm.announce-presence')
 @reactive.when('storpool-block-charm.services-started')
-@reactive.when('storpool-presence.notify-joined')
-@reactive.when('storpool-block-charm.leader')
-def announce_to_new_peers(hk):
-    """
-    Somebody just came in, give them the news...
-    """
-    rdebug('letting the new guy know... maybe')
-    reactive.set_state('storpool-block-charm.announce-presence')
-    reactive.remove_state('storpool-presence.notify-joined')
+@reactive.when('block-p.notify')
+def peers_changed(_):
+    try_announce()
 
 
-@reactive.when('storpool-block-charm.announce-presence')
 @reactive.when('storpool-block-charm.services-started')
 @reactive.when('storpool-presence.notify')
-@reactive.when('storpool-block-charm.leader')
-def announce_peers(hk):
-    """
-    If this unit is the leader, send the collected presence data to other
-    charms along the `storpool-presence` hook.
-    """
-    rdebug('about to announce our presence to the StorPool Cinder thing')
-    ensure_our_presence()
-    reactive.remove_state('storpool-block-charm.announce-presence')
+def cinder_changed(_):
+    try_announce()
+
+
+def try_announce():
+    try:
+        announce_presence()
+        # Only reset the flag afterwards so that if anything
+        # goes wrong we can retry this later
+        # It should be safe to reset both states at once; we always
+        # fetch data on both hooks, so we can't miss anything.
+        reactive.remove_state('block-p.notify')
+        reactive.remove_state('block-p.notify-joined')
+        reactive.remove_state('storpool-presence.notify')
+        reactive.remove_state('storpool-presence.notify-joined')
+    except Exception as e:
+        raise  # FIXME: hookenv.log and then exit(42)?
+
+
+def build_presence(current):
+    current['id'] = spconfig.get_our_id()
+    current['hostname'] = platform.node()
 
     cfg = hookenv.config()
-    rel_ids = hookenv.relation_ids('storpool-presence')
-    rdebug('- got rel_ids {rel_ids}'.format(rel_ids=rel_ids))
-    for rel_id in rel_ids:
-        rdebug('  - trying for {rel_id}'.format(rel_id=rel_id))
-        data = json.dumps({
-            'presence': service_hook.get_present_nodes(),
+    keys = (
+        'storpool_conf',
+        'storpool_repo_url',
+        'storpool_version',
+        'storpool_openstack_version',
+    )
+    missing = list(filter(lambda k: cfg.get(k) is None, keys))
+    if reactive.is_state('storpool-block-charm.leader') and not missing:
+        current['config'] = {
             'storpool_conf': cfg['storpool_conf'],
             'storpool_repo_url': cfg['storpool_repo_url'],
             'storpool_version': cfg['storpool_version'],
             'storpool_openstack_version': cfg['storpool_openstack_version'],
-        })
-        hookenv.relation_set(rel_id,
-                             storpool_presence=data)
-        rdebug('  - done with {rel_id}'.format(rel_id=rel_ids))
-    rdebug('- done with the rel_ids')
+        }
+
+
+def announce_presence(force=False):
+    data = service_hook.fetch_presence(RELATIONS)
+
+    mach_id = 'block:' + sputils.get_machine_id()
+    our_node = data['nodes'].get(mach_id)
+
+    announce = force
+    block_joined = reactive.is_state('block-p.notify-joined')
+    cinder_joined = reactive.is_state('storpool-presence.notify-joined')
+    if cinder_joined or block_joined:
+        announce = True
+
+    generation = int(data['generation'])
+    if generation < 0:
+        generation = 0
+
+    if reactive.is_state('storpool-block-charm.bump-generation'):
+        generation = generation + 1
+        announce = True
+
+    if announce:
+        our_node = {
+            'generation': generation
+        }
+        build_presence(our_node)
+        ndata = {
+            'generation': generation,
+
+            'nodes': {
+                mach_id: our_node,
+            },
+        }
+        rdebug('announcing {data}'.format(data=ndata),
+               cond='announce')
+        service_hook.send_presence(ndata, RELATIONS)
+
+    reactive.remove_state('storpool-block-charm.bump-generation')
+
+    check_for_new_presence(data)
+
+
+def check_for_new_presence(data):
+    found = None
+    old = unitdata.kv().get(kvdata.KEY_LXD_NAME)
+    our_mach_id = sputils.get_machine_id()
+
+    for node in data['nodes']:
+        if not node.startswith('cinder:'):
+            continue
+        mach_id = node[7:]
+        parts = mach_id.split('/')
+        if len(parts) == 3 and parts[1] == 'lxd':
+            if parts[0] == our_mach_id:
+                rdebug('found our container: {lx}'.format(lx=mach_id),
+                       cond='announce')
+                if found is None:
+                    found = mach_id
+                    if old is None or old != mach_id:
+                        rdebug('setting Cinder container {mach_id}'
+                               .format(mach_id=mach_id))
+                        unitdata.kv().set(kvdata.KEY_LXD_NAME, mach_id)
+                        reactive.set_state('storpool-block-charm.lxd')
+
+    if not found:
+        rdebug('- no Cinder containers here', cond='announce')
+        if old is not None:
+            rdebug('forgetting about Cinder container {old}'.format(old=old))
+            unitdata.kv().set(kvdata.KEY_LXD_NAME, None)
+            reactive.set_state('storpool-block-charm.lxd')
 
 
 def remove_block_conffile(confname):
@@ -255,15 +292,15 @@ def remove_block_conffile(confname):
                    'ignoring the error: {e}'.format(e=e))
 
 
-@reactive.when('storpool-presence.process-lxd-name')
-def create_block_conffile(hk):
+@reactive.when('storpool-block-charm.lxd')
+def create_block_conffile():
     """
     Instruct storpool_block to create devices in a container's filesystem.
     """
     rdebug('create_block_conffile() invoked')
-    reactive.remove_state('storpool-presence.process-lxd-name')
+    reactive.remove_state('storpool-block-charm.lxd')
     confname = block_conffile()
-    cinder_name = osi.lxd_cinder_name()
+    cinder_name = unitdata.kv().get(kvdata.KEY_LXD_NAME)
     if cinder_name is None or cinder_name == '':
         rdebug('no Cinder containers to tell storpool_block about')
         remove_block_conffile(confname)
@@ -370,7 +407,7 @@ def ready():
     `active`.
     """
     rdebug('ready to go')
-    ensure_our_presence()
+    try_announce()
     spstatus.set('active', 'so far so good so what')
 
 
