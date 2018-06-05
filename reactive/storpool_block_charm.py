@@ -140,12 +140,14 @@ def we_are_no_longer_the_leader():
 @reactive.when('block-p.notify')
 def peers_changed(_):
     try_announce()
+    update_status()
 
 
 @reactive.when('storpool-block-charm.services-started')
 @reactive.when('storpool-presence.notify')
 def cinder_changed(_):
     try_announce()
+    update_status()
 
 
 def try_announce():
@@ -408,7 +410,7 @@ def ready():
     """
     rdebug('ready to go')
     try_announce()
-    spstatus.set('active', 'so far so good so what')
+    update_status()
 
 
 def run(reraise=False):
@@ -447,6 +449,99 @@ def run(reraise=False):
         exit(42)
 
 
+def get_status():
+    inst = reactive.is_state('storpool-block-charm.services-started')
+    status = {
+        'node': sputils.get_machine_id(),
+        'charm-config': hookenv.config(),
+        'installed': inst,
+        'presence': service_hook.fetch_presence(RELATIONS),
+        'lxd': unitdata.kv().get(kvdata.KEY_LXD_NAME),
+
+        'ready': False,
+    }
+
+    for name in (
+      'storpool_repo_url',
+      'storpool_version',
+      'storpool_openstack_version',
+      'storpool_conf'
+    ):
+        value = status['charm-config'].get(name)
+        if value is None or value == '':
+            status['message'] = 'No {name} in the config'.format(name=name)
+            return status
+    if not inst:
+        status['message'] = 'Packages not installed yet'
+        return status
+
+    spstatus.set('maintenance', 'checking the StorPool configuration')
+    rdebug('about to try to obtain our StorPool ID')
+    try:
+        out = subprocess.check_output(['storpool_showconf', '-ne', 'SP_OURID'])
+        out = out.decode()
+        out = out.split('\n')
+        our_id = out[0]
+    except Exception as e:
+        status['message'] = 'Could not obtain the StorPool ID: {e}' \
+                             .format(e=e)
+        return status
+
+    spstatus.set('maintenance', 'checking the StorPool services...')
+    svcs = ('storpool_beacon', 'storpool_block')
+    rdebug('checking for services: {svcs}'.format(svcs=svcs))
+    missing = list(filter(lambda s: not host.service_running(s), svcs))
+    rdebug('missing: {missing}'.format(missing=missing))
+    if missing:
+        status['message'] = 'StorPool services not running: {missing}' \
+                            .format(missing=' '.join(missing))
+        return status
+
+    spstatus.set('maintenance', 'querying the StorPool API')
+    rdebug('checking the network status of the StorPool client')
+    try:
+        out = subprocess.check_output(['storpool', '-jB', 'service', 'list'])
+        out = out.decode()
+        data = json.loads(out)
+        rdebug('got API response: {d}'.format(d=data))
+        if 'error' in data:
+            raise Exception('API response: {d}'
+                            .format(d=data['error']['descr']))
+        state = data['data']['clients'][our_id]['status']
+        rdebug('got our client status {st}'.format(st=state))
+        if state != 'running':
+            status['message'] = 'StorPool client: {st}'.format(st=state)
+            return status
+    except Exception as e:
+        status['message'] = 'Could not query the StorPool API: {e}' \
+                            .format(e=e)
+        return status
+
+    spstatus.set('maintenance', 'querying the StorPool API for client status')
+    rdebug('checking the status of the StorPool client')
+    try:
+        out = subprocess.check_output(['storpool', '-jB', 'client', 'status'])
+        out = out.decode()
+        data = json.loads(out)
+        rdebug('got API response: {d}'.format(d=data))
+        if 'error' in data:
+            raise Exception('API response: {d}'
+                            .format(d=data['error']['descr']))
+        int_id = int(our_id)
+        found = list(filter(lambda e: e['id'] == int_id, data['data']))
+        if not found:
+            raise Exception('No client status reported for {our_id}'
+                            .format(i=our_id))
+        state = found[0]['configStatus']
+        status['ready'] = state == 'ok'
+        status['message'] = 'StorPool client: {st}'.format(st=state)
+        return status
+    except Exception as e:
+        status['message'] = 'Could not query the StorPool API: {e}' \
+                            .format(e=e)
+        return status
+
+
 @reactive.when('storpool-block-charm.sp-run')
 def sp_run():
     # Yes, removing it at once, not after the fact.  If something
@@ -456,6 +551,32 @@ def sp_run():
         run(reraise=True)
     except BaseException as e:
         s = 'Could not rerun the StorPool configuration: {e}'.format(e=e)
+        hookenv.log(s, hookenv.ERROR)
+        hookenv.action_fail(s)
+
+
+@reactive.hook('update-status')
+def update_status():
+    try:
+        status = get_status()
+        spstatus.set('active' if status['ready'] else 'maintenance',
+                     status['message'])
+    except BaseException as e:
+        s = 'Querying the StorPool status: {e}'.format(e=e)
+        hookenv.log(s, hookenv.ERROR)
+        spstatus.set('maintenance', s)
+
+
+@reactive.when('storpool-block-charm.sp-status')
+def sp_status():
+    # Yes, removing it at once, not after the fact.  If something
+    # goes wrong, the action may be reissued.
+    reactive.remove_state('storpool-block-charm.sp-status')
+    try:
+        status = get_status()
+        hookenv.action_set({'status': json.dumps(status)})
+    except BaseException as e:
+        s = 'Querying the StorPool status: {e}'.format(e=e)
         hookenv.log(s, hookenv.ERROR)
         hookenv.action_fail(s)
 

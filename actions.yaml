@@ -1,3 +1,6 @@
 sp-run:
   description: Rerun the StorPool setup and configuration.
   additionalProperties: false
+sp-status:
+  description: Get status information about the storpool-block unit.
+  additionalProperties: false
