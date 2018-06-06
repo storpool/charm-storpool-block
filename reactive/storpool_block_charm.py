@@ -91,6 +91,14 @@ def upgrade_setup():
     run()
 
 
+@reactive.hook('start')
+def start_service():
+    """
+    Try to (re-)install everything.
+    """
+    run()
+
+
 @reactive.hook('leader-elected')
 def we_are_the_leader():
     """
