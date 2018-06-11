@@ -1,0 +1,3 @@
+sp-run:
+  description: Rerun the StorPool setup and configuration.
+  additionalProperties: false

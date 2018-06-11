@@ -411,7 +411,14 @@ def ready():
     spstatus.set('active', 'so far so good so what')
 
 
-def run():
+def run(reraise=False):
+    def reraise_or_fail():
+        if reraise:
+            raise
+        else:
+            nonlocal failed
+            failed = True
+
     failed = False
     try:
         reactive.remove_state('storpool-block-charm.services-started')
@@ -428,16 +435,29 @@ def run():
         hookenv.log('StorPool: could not install the {names} packages: {e}'
                     .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
                     hookenv.ERROR)
-        failed = True
+        reraise_or_fail()
     except sperror.StorPoolNoCGroupsException as e_cfg:
         hookenv.log('StorPool: {e}'.format(e=e_cfg), hookenv.ERROR)
-        failed = True
+        reraise_or_fail()
     except sperror.StorPoolException as e:
         hookenv.log('StorPool installation problem: {e}'.format(e=e))
-        failed = True
+        reraise_or_fail()
 
     if failed:
         exit(42)
+
+
+@reactive.when('storpool-block-charm.sp-run')
+def sp_run():
+    # Yes, removing it at once, not after the fact.  If something
+    # goes wrong, the action may be reissued.
+    reactive.remove_state('storpool-block-charm.sp-run')
+    try:
+        run(reraise=True)
+    except BaseException as e:
+        s = 'Could not rerun the StorPool configuration: {e}'.format(e=e)
+        hookenv.log(s, hookenv.ERROR)
+        hookenv.action_fail(s)
 
 
 @reactive.hook('stop')
