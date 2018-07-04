@@ -77,6 +77,7 @@ error.StorPoolPackageInstallException = FunnyException
 error.StorPoolNoCGroupsException = FunnyException
 error.StorPoolException = FunnyException
 kvdata = mock.Mock()
+osi = mock.Mock()
 repo = mock.Mock()
 txn = mock.Mock()
 utils = mock.Mock()
