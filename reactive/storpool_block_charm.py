@@ -75,6 +75,7 @@ def config_changed():
     """
     if reactive.is_state('storpool-block-charm.leader'):
         reactive.set_state('storpool-block-charm.bump-generation')
+    spconfig.set_meta_config(None)
     run()
 
 
@@ -83,6 +84,7 @@ def upgrade_setup():
     """
     Try to (re-)install everything and re-announce.
     """
+    spconfig.set_meta_config(None)
     run()
 
 
