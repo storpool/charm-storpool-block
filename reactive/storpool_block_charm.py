@@ -104,11 +104,6 @@ def we_are_the_leader():
     information to the other charms along the `storpool-presence` hook.
     """
     rdebug('have we really been elected leader?')
-    if not hookenv.is_leader():
-        rdebug('false alarm...')
-        reactive.remove_state('storpool-block-charm.leader')
-        return
-    rdebug('but really?')
     try:
         hookenv.leader_set(charm_storpool_block_unit=sputils.get_machine_id())
     except Exception as e:
