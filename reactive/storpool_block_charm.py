@@ -176,12 +176,7 @@ def build_presence(current):
     )
     missing = list(filter(lambda k: cfg.get(k) is None, keys))
     if reactive.is_state('storpool-block-charm.leader') and not missing:
-        current['config'] = {
-            'storpool_conf': cfg['storpool_conf'],
-            'storpool_repo_url': cfg['storpool_repo_url'],
-            'storpool_version': cfg['storpool_version'],
-            'storpool_openstack_version': cfg['storpool_openstack_version'],
-        }
+        current['config'] = {key: cfg[key] for key in keys}
 
 
 def announce_presence(force=False):
