@@ -817,8 +817,14 @@ def get_status():
                 "No client status reported for {our_id}".format(i=our_id)
             )
         state = found[0]["configStatus"]
-        status["ready"] = state == "ok"
         status["message"] = "StorPool client: {st}".format(st=state)
+
+        if state == "ok":
+            status["ready"] = True
+            rdebug("get_status: calling for Cinder LXD reconfiguration")
+            reactive.set_state("storpool-block-charm.lxd")
+        else:
+            status["ready"] = False
         return status
     except Exception as e:
         status["message"] = "Could not query the StorPool API: {e}".format(e=e)
