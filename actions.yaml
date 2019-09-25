@@ -1,3 +1,6 @@
+sp-lxd:
+  description: Rerun the StorPool LXD container configuration.
+  additionalProperties: false
 sp-run:
   description: Rerun the StorPool setup and configuration.
   additionalProperties: false
