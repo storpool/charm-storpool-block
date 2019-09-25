@@ -20,8 +20,8 @@ from __future__ import print_function
 import json
 import os
 import platform
+import re
 import subprocess
-import tempfile
 
 from charms import reactive
 from charmhelpers.core import hookenv, host, unitdata
@@ -31,7 +31,6 @@ from spcharms import error as sperror
 from spcharms import kvdata
 from spcharms import osi
 from spcharms import service_hook
-from spcharms import txn
 from spcharms import status as spstatus
 from spcharms import utils as sputils
 
@@ -40,14 +39,14 @@ from spcharms.run import storpool_block as run_block
 
 RELATIONS = ["block-p", "storpool-presence"]
 
-
-def block_conffile():
-    """
-    Return the name of the configuration file that will be generated for
-    the `storpool_block` service in order to also export the block devices
-    into the host's LXD containers.
-    """
-    return "/etc/storpool.conf.d/storpool-cinder-block.conf"
+RE_SPDEV = re.compile(
+    r"""
+    ^
+    /dev/sp-
+    (?: 0 | [1-9][0-9]* )
+    $""",
+    re.X,
+)
 
 
 def rdebug(s, cond=None):
@@ -246,188 +245,414 @@ def check_for_new_presence(data):
             reactive.set_state("storpool-block-charm.lxd")
 
 
-def remove_block_conffile(confname):
-    """
-    Remove a previously-created storpool_block config file that
-    instructs it to expose devices to LXD containers.
-    """
-    rdebug(
-        "no Cinder LXD containers found, checking for "
-        "any previously stored configuration..."
-    )
-    removed = False
-    if os.path.isfile(confname):
-        rdebug(
-            "- yes, {confname} exists, removing it".format(confname=confname)
-        )
-        try:
-            os.unlink(confname)
-            removed = True
-        except Exception as e:
+class BlockMirrorMigrate:
+    """ Perform a nsenter-to-mirrordir migration. """
+
+    def __init__(self, cinder_name):
+        """ Initialize a migration object. """
+        self.cinder_name = cinder_name
+        self.clear_cache()
+
+    def get_container_config(self):
+        """ Get the LXC configuration of the container. """
+        if self.container_config is not None:
+            return self.container_config
+
+        if self.cinder_name is None:
+            return None
+
+        needle = "-" + self.cinder_name.replace("/", "-")
+        container = [
+            item
+            for item in json.loads(
+                subprocess.check_output(
+                    ["env", "LC_ALL=C", "lxc", "list", "--format=json"],
+                    shell=False,
+                ).decode("UTF-8")
+            )
+            if item["name"].endswith(needle)
+        ]
+        if not container:
             rdebug(
-                "could not remove {confname}: {e}".format(
-                    confname=confname, e=e
+                "Could not find the {name} container running".format(
+                    name=self.cinder_name
                 )
             )
-    elif os.path.exists(confname):
-        rdebug(
-            "- well, {confname} exists, but it is not a file; "
-            "removing it anyway".format(confname=confname)
+            return None
+        elif len(container) != 1:
+            rdebug(
+                "Cannot handle more than one {name} container".format(
+                    name=self.cinder_name
+                )
+            )
+            return None
+
+        self.container_config = container[0]
+        return self.container_config
+
+    def get_storpool_major(self):
+        """ Get the major number for the StorPool block devices. """
+        if self.storpool_major is not None:
+            return self.storpool_major
+
+        # "us-ascii" should be enough, but let us not take any chances
+        with open("/proc/devices", mode="r", encoding="Latin-1") as devf:
+            lines = [line.strip().split() for line in devf.readlines()]
+        found = [
+            item for item in lines if len(item) > 1 and item[1] == "StorPool"
+        ]
+        if not found:
+            rdebug("Could not find a StorPool line in /proc/devices")
+            return None
+        if len(found) != 1:
+            rdebug("Found more than one StorPool line in /proc/devices")
+            return None
+
+        self.storpool_major = int(found[0][0])
+        return self.storpool_major
+
+    def get_contained_devices(self):
+        """ Find the devices in the container. """
+        if self.contained_devices is not None:
+            return self.contained_devices
+
+        if self.container_config is None or self.storpool_major is None:
+            return None
+        major_hex = "{0:x}".format(self.storpool_major)
+
+        outp = (
+            subprocess.check_output(
+                [
+                    "env",
+                    "LC_ALL=C",
+                    "lxc",
+                    "exec",
+                    "--",
+                    self.container_config["name"],
+                    "find",
+                    "/dev/",
+                    "-mindepth",
+                    "1",
+                    "-maxdepth",
+                    "1",
+                    "-name",
+                    "sp-*",
+                    "-exec",
+                    "stat",
+                    "-c",
+                    "%n\t%t\n",
+                    "{}",
+                    ";",
+                ],
+                shell=False,
+            )
+            .decode("Latin-1")
+            .split("\n")
         )
-        subprocess.call(["rm", "-rf", "--", confname])
-        removed = True
-    if removed:
-        rdebug(
-            "- let us try to restart the storpool_block service "
-            + "(it may not even have been started yet, so ignore errors)"
+        items = [line.split("\t") for line in outp]
+        found = [
+            item[0] for item in items if len(item) > 1 and item[1] == major_hex
+        ]
+
+        self.contained_devices = found
+        return self.contained_devices
+
+    def get_contained_mounts(self):
+        """ Find the devices in the container. """
+        if self.contained_mounts is not None:
+            return self.contained_mounts
+
+        if self.container_config is None:
+            return None
+
+        outp = (
+            subprocess.check_output(
+                [
+                    "env",
+                    "LC_ALL=C",
+                    "lxc",
+                    "exec",
+                    "--",
+                    self.container_config["name"],
+                    "cat",
+                    "/proc/mounts",
+                ],
+                shell=False,
+            )
+            .decode("Latin-1")
+            .split("\n")
         )
+        items = [line.split() for line in outp]
+        found = [
+            item[1]
+            for item in items
+            if len(item) > 2 and RE_SPDEV.match(item[1]) and item[2] == "tmpfs"
+        ]
+
+        self.contained_mounts = found
+        return self.contained_mounts
+
+    def get_storpool_mirror_dir(self):
+        """ Find the directory where storpool_block mirrors the devices. """
+        if self.storpool_mirror_dir is not None:
+            return self.storpool_mirror_dir
+
         try:
-            if host.service_running("storpool_block"):
+            with open(
+                "/run/storpool_block.bin.pid", mode="r", encoding="us-ascii"
+            ) as pidf:
+                pid = int(pidf.readlines()[0].strip())
+        except OSError as err:
+            rdebug(
+                "Could not read the storpool_block pid file: "
+                "{etype}: {err}".format(etype=type(err).__name__, err=err)
+            )
+            return None
+
+        try:
+            with open(
+                "/proc/{pid}/cmdline".format(pid=pid),
+                mode="r",
+                encoding="Latin-1",
+            ) as cmdf:
+                data = cmdf.read().split("\0")
+        except OSError as err:
+            rdebug(
+                "Could not read /proc/{pid}/cmdline: {etype}: {err}".format(
+                    pid=pid, etype=type(err).__name__, err=err
+                )
+            )
+            return None
+
+        try:
+            dirname = data[data.index("-M") + 1]
+        except ValueError:
+            rdebug("There is no StorPool mirror directory (no '-M' option)")
+            return None
+
+        self.storpool_mirror_dir = dirname
+        return dirname
+
+    def get_container_mirror_dir(self):
+        """ Get the path where the StorPool mirror dir is mounted within. """
+        if self.container_mirror_dir is not None:
+            return self.container_mirror_dir
+
+        if self.container_config is None or self.storpool_mirror_dir is None:
+            return None
+
+        found = [
+            item
+            for item in self.container_config["devices"].items()
+            if item[1].get("source") == self.storpool_mirror_dir
+        ]
+        if not found:
+            return None
+
+        self.container_mirror_dir = found[0]
+        return self.container_mirror_dir
+
+    def clear_cache(self):
+        """ Remove any cached detected data. """
+        self.container_config = None
+        self.storpool_mirror_dir = None
+        self.storpool_major = None
+        self.contained_devices = None
+        self.contained_mounts = None
+        self.container_mirror_dir = None
+
+    def detect(self, force=False):
+        """ Find out as much as we can about the environment. """
+        if force:
+            self.clear_cache()
+
+        self.get_container_config()
+        self.get_storpool_mirror_dir()
+        self.get_container_mirror_dir()
+        self.get_storpool_major()
+        self.get_contained_devices()
+        self.get_contained_mounts()
+
+    def done(self):
+        """ Is the migration complete? """
+        return (
+            self.storpool_mirror_dir is not None
+            and self.container_mirror_dir is not None
+            and not self.contained_mounts
+            and not self.contained_devices
+        )
+
+    def unready(self):
+        """ Are the prerequisites not met yet? """
+        if self.storpool_mirror_dir is None:
+            rdebug("no mirror directory support in storpool_block")
+            return True
+
+        if self.container_config is None:
+            rdebug("no data about the Cinder container")
+            return True
+
+        return False
+
+    def run(self):
+        """ Attempt to perform the migration. """
+        if self.unready():
+            return False
+
+        if self.container_mirror_dir is None:
+            rdebug("Trying to add the StorPool mirror dir to the container")
+            res = subprocess.call(
+                [
+                    "env",
+                    "LC_ALL=C",
+                    "lxc",
+                    "config",
+                    "device",
+                    "add",
+                    "--",
+                    self.container_config["name"],
+                    "dev-storpool",
+                    "disk",
+                    "path=/dev/storpool",
+                    "source={mirror}".format(mirror=self.storpool_mirror_dir),
+                ],
+                shell=False,
+            )
+            if res != 0:
                 rdebug(
-                    "  - well, it does seem to be running, so "
-                    + "restarting it"
+                    "Could not add the StorPool mirror directory: "
+                    "lxc exit code {res}".format(res=res)
                 )
-                host.service_restart("storpool_block")
-            else:
-                rdebug("  - nah, it was not running at all indeed")
-        except Exception as e:
+                return False
+
+        if self.contained_mounts:
+            errors = False
+            for mount in self.contained_mounts:
+                rdebug(
+                    "Trying to unmount {mount} within the container".format(
+                        mount=mount
+                    )
+                )
+                res = subprocess.call(
+                    [
+                        "env",
+                        "LC_ALL=C",
+                        "lxc",
+                        "exec",
+                        "--",
+                        self.container_config["name"],
+                        "umount",
+                        "--",
+                        mount,
+                    ],
+                    shell=False,
+                )
+                if res != 0:
+                    rdebug(
+                        "Could not unmount {mount}: "
+                        "lxc exit code {res}".format(mount=mount, res=res)
+                    )
+                    errors = True
+            if errors:
+                return False
+
+        if self.contained_devices:
             rdebug(
-                "  - could not restart the service, but "
-                "ignoring the error: {e}".format(e=e)
+                "Trying to remove devices from the container: {devs}".format(
+                    devs=" ".join(self.contained_devices)
+                )
             )
+            res = subprocess.call(
+                [
+                    "env",
+                    "LC_ALL=C",
+                    "lxc",
+                    "exec",
+                    "--",
+                    self.container_config["name"],
+                    "rm",
+                    "--",
+                ]
+                + list(self.contained_devices),
+                shell=False,
+            )
+            if res != 0:
+                rdebug(
+                    "Could not remove the devices: "
+                    "lxc exit code {res}".format(res=res)
+                )
+                return False
+
+        rdebug("The migration seems to be complete!")
+        return True
+
+    def __str__(self):
+        """ Provide a human-readable representation. """
+        return (
+            "{otype}("
+            "cinder_name {cinder_name}"
+            " container_config {container_config}"
+            " storpool_mirror_dir {storpool_mirror_dir}"
+            " container_mirror_dir {container_mirror_dir}"
+            " storpool_major {storpool_major}"
+            " contained_devices {contained_devices}"
+            " contained_mounts {contained_mounts}"
+            ")".format(
+                otype=type(self).__name__,
+                cinder_name=repr(self.cinder_name),
+                container_config=repr(
+                    {
+                        "name": self.container_config["name"],
+                        "devices": self.container_config["devices"],
+                    }
+                ),
+                storpool_mirror_dir=repr(self.storpool_mirror_dir),
+                contained_devices=repr(self.contained_devices),
+                contained_mounts=repr(self.contained_mounts),
+                storpool_major=repr(self.storpool_major),
+                container_mirror_dir=repr(self.container_mirror_dir),
+            )
+        )
 
 
 @reactive.when("storpool-block-charm.lxd")
-def create_block_conffile():
+def reconfigure_cinder_lxd():
     """
     Instruct storpool_block to create devices in a container's filesystem.
     """
-    rdebug("create_block_conffile() invoked")
+    rdebug("reconfigure_cinder_lxd() invoked")
     reactive.remove_state("storpool-block-charm.lxd")
-    confname = block_conffile()
     cinder_name = unitdata.kv().get(kvdata.KEY_LXD_NAME)
     if cinder_name is None or cinder_name == "":
         rdebug("no Cinder containers to tell storpool_block about")
-        remove_block_conffile(confname)
         return
     rdebug("- analyzing a machine name: {name}".format(name=cinder_name))
 
-    # Now is there actually an LXD container by that name here?
-    lxc_text = sputils.exec(["lxc", "list", "--format=json"])
-    if lxc_text["res"] != 0:
-        rdebug("no LXC containers at all here")
-        remove_block_conffile(confname)
-        return
-    try:
-        lxcs = json.loads(lxc_text["out"])
-        pattern = "-" + cinder_name.replace("/", "-")
-        found = None
-        for lxc in lxcs:
-            if lxc["name"].endswith(pattern):
-                found = lxc
-                break
-        if found is None:
-            rdebug("no running {pat} LXC container".format(pat=pattern))
-            remove_block_conffile(confname)
-            return
-        lxc_name = found["name"]
-    except Exception as e:
-        rdebug(
-            'could not parse the output of "lxc list --format=json": '
-            "{e}".format(e=e)
-        )
-        remove_block_conffile(confname)
-        return
+    migrate = BlockMirrorMigrate(cinder_name)
+    migrate.detect()
+    rdebug("whee: migrate {migrate}".format(migrate=migrate))
+    if migrate.done():
+        rdebug("The mirror-dir migration seems to be complete")
+    elif migrate.unready():
+        rdebug("The mirror-dir migration cannot start yet")
+    else:
+        rdebug("Attempting the mirror-dir migration")
+        res = migrate.run()
+        rdebug("migrate.run() returned {res}".format(res=res))
 
-    rdebug('found a Cinder container at "{name}"'.format(name=lxc_name))
-    try:
+    obsolete = "/etc/storpool.conf.d/storpool-cinder-block.conf"
+    if os.path.exists(obsolete):
         rdebug(
-            'about to record the name of the Cinder LXD - "{name}" - '
-            "into {confname}".format(name=lxc_name, confname=confname)
+            "- removing the obsolete {obsolete} file".format(obsolete=obsolete)
         )
-        dirname = os.path.dirname(confname)
-        rdebug(
-            "- checking for the {dirname} directory".format(dirname=dirname)
-        )
-        if not os.path.isdir(dirname):
-            rdebug("  - nah, creating it")
-            os.mkdir(dirname, mode=0o755)
-
-        rdebug("- is the file there?")
-        okay = False
-        expected_contents = [
-            "[{node}]".format(node=platform.node()),
-            "SP_EXTRA_FS=lxd:{name}".format(name=lxc_name),
-        ]
-        if os.path.isfile(confname):
-            rdebug("  - yes, it is... but does it contain the right data?")
-            with open(confname, mode="r") as conffile:
-                contents = list(
-                    map(lambda s: s.rstrip(), conffile.readlines())
-                )
-                if contents == expected_contents:
-                    rdebug("   - whee, it already does!")
-                    okay = True
-                else:
-                    rdebug("   - it does NOT: {lst}".format(lst=contents))
-        else:
-            rdebug("   - nah...")
-            if os.path.exists(confname):
-                rdebug("     - but it still exists?!")
-                subprocess.call(["rm", "-rf", "--", confname])
-                if os.path.exists(confname):
-                    rdebug(
-                        "     - could not remove it, so leaving it "
-                        "alone, I guess"
-                    )
-                    okay = True
-
-        if not okay:
+        try:
+            os.unlink(obsolete)
+        except OSError as err:
             rdebug(
-                "- about to recreate the {confname} file".format(
-                    confname=confname
+                "  - could not remove it: {etype}: {err}".format(
+                    etype=type(err).__name__, err=err
                 )
             )
-            with tempfile.NamedTemporaryFile(dir="/tmp", mode="w+t") as spconf:
-                print("\n".join(expected_contents), file=spconf)
-                spconf.flush()
-                txn.install(
-                    "-o",
-                    "root",
-                    "-g",
-                    "root",
-                    "-m",
-                    "644",
-                    "--",
-                    spconf.name,
-                    confname,
-                )
-            rdebug("- looks like we are done with it")
-            rdebug(
-                "- let us try to restart the storpool_block service "
-                "(it may not even have been started yet, so "
-                "ignore errors)"
-            )
-            try:
-                if host.service_running("storpool_block"):
-                    rdebug(
-                        "  - well, it does seem to be running, "
-                        "so restarting it"
-                    )
-                    host.service_restart("storpool_block")
-                else:
-                    rdebug("  - nah, it was not running at all indeed")
-            except Exception as e:
-                rdebug(
-                    "  - could not restart the service, but "
-                    "ignoring the error: {e}".format(e=e)
-                )
-    except Exception as e:
-        rdebug(
-            "could not check for and/or recreate the {confname} "
-            'storpool_block config file adapted the "{name}" '
-            "LXD container: {e}".format(confname=confname, name=lxc_name, e=e)
-        )
 
 
 def ready():
