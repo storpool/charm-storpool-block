@@ -30,6 +30,7 @@ class SPServiceHook(object):
     """
     Simulate the service-hook layer and interface.
     """
+
     def __init__(self):
         """
         Initialize a service hook object with no presence data.
@@ -70,7 +71,7 @@ class FunnyException(Exception):
 
 
 config = mock.Mock()
-config.get_our_id.return_value = '16'
+config.get_our_id.return_value = "16"
 error = mock.Mock()
 error.StorPoolNoConfigException = FunnyException
 error.StorPoolPackageInstallException = FunnyException
@@ -81,7 +82,7 @@ osi = mock.Mock()
 repo = mock.Mock()
 txn = mock.Mock()
 utils = mock.Mock()
-utils.MACHINE_ID = '42'
+utils.MACHINE_ID = "42"
 utils.get_machine_id.return_value = utils.MACHINE_ID
 
 service_hook = SPServiceHook()

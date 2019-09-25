@@ -2,9 +2,11 @@
 
 # Load modules from $JUJU_CHARM_DIR/lib
 import sys
-sys.path.append('lib')
+
+sys.path.append("lib")
 
 from charms.layer import basic
+
 basic.bootstrap_charm_deps()
 basic.init_config_states()
 
@@ -12,5 +14,5 @@ basic.init_config_states()
 from charms import reactive
 
 
-reactive.set_state('storpool-block-charm.sp-run')
+reactive.set_state("storpool-block-charm.sp-run")
 reactive.main()

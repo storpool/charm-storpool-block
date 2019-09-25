@@ -12,11 +12,11 @@ import mock
 
 from charmhelpers.core import hookenv
 
-root_path = os.path.realpath('.')
+root_path = os.path.realpath(".")
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
-lib_path = os.path.realpath('unit_tests/lib')
+lib_path = os.path.realpath("unit_tests/lib")
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
@@ -90,8 +90,10 @@ class MockConfig(object):
         if initializing_config == self:
             return super(MockConfig, self).__setattr__(name, value)
 
-        raise AttributeError('Cannot override the MockConfig '
-                             '"{name}" attribute'.format(name=name))
+        raise AttributeError(
+            "Cannot override the MockConfig "
+            '"{name}" attribute'.format(name=name)
+        )
 
 
 r_state = MockReactive()
@@ -103,9 +105,9 @@ hookenv.config = lambda: r_config
 
 def mock_reactive_states(f):
     def inner1(inst, *args, **kwargs):
-        @mock.patch('charms.reactive.set_state', new=r_state.set_state)
-        @mock.patch('charms.reactive.remove_state', new=r_state.remove_state)
-        @mock.patch('charms.reactive.helpers.is_state', new=r_state.is_state)
+        @mock.patch("charms.reactive.set_state", new=r_state.set_state)
+        @mock.patch("charms.reactive.remove_state", new=r_state.remove_state)
+        @mock.patch("charms.reactive.helpers.is_state", new=r_state.is_state)
         def inner2(*args, **kwargs):
             return f(inst, *args, **kwargs)
 
@@ -117,9 +119,9 @@ def mock_reactive_states(f):
 from reactive import storpool_block_charm as testee
 
 
-LEADER_STATE = 'storpool-block-charm.leader'
-PRESENCE_STATE = 'storpool-block-charm.announce-presence'
-RUNNING_STATE = 'storpool-block-charm.services-started'
+LEADER_STATE = "storpool-block-charm.leader"
+PRESENCE_STATE = "storpool-block-charm.announce-presence"
+RUNNING_STATE = "storpool-block-charm.services-started"
 
 
 class TestStorPoolBlock(unittest.TestCase):
@@ -135,13 +137,15 @@ class TestStorPoolBlock(unittest.TestCase):
         """
         states = r_state.r_get_states()
         tested_function()
-        self.assertEquals('storpool-repo-add', spstatus.status_reset_handler)
+        self.assertEquals("storpool-repo-add", spstatus.status_reset_handler)
         if is_upgrade:
-            self.assertEquals(states.union(set([PRESENCE_STATE])),
-                              r_state.r_get_states())
+            self.assertEquals(
+                states.union(set([PRESENCE_STATE])), r_state.r_get_states()
+            )
         else:
-            self.assertEquals(states.union(set([RUNNING_STATE])),
-                              r_state.r_get_states())
+            self.assertEquals(
+                states.union(set([RUNNING_STATE])), r_state.r_get_states()
+            )
 
     def do_test_we_are_the_leader(self, h_is_leader, h_leader_set):
         """
@@ -154,8 +158,7 @@ class TestStorPoolBlock(unittest.TestCase):
         r_state.set_state(LEADER_STATE)
         leader = r_state.r_get_states()
         self.assertNotEquals(no_leader, leader)
-        self.assertEquals(no_leader.union(set([LEADER_STATE])),
-                          leader)
+        self.assertEquals(no_leader.union(set([LEADER_STATE])), leader)
 
         is_leader_call_count = h_is_leader.call_count
         leader_set_call_count = h_leader_set.call_count
@@ -170,7 +173,7 @@ class TestStorPoolBlock(unittest.TestCase):
             """
             Simulate a leader_set() failure.
             """
-            raise Exception('oops')
+            raise Exception("oops")
 
         # is_leader() succeeds, but leader_set() fails
         h_is_leader.return_value = True
@@ -198,8 +201,9 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(is_leader_call_count + 3, h_is_leader.call_count)
         self.assertEquals(leader_set_call_count + 2, h_leader_set.call_count)
         self.assertEquals((), self.lset_args)
-        self.assertEquals({'charm_storpool_block_unit': sputils.MACHINE_ID},
-                          self.lset_kwargs)
+        self.assertEquals(
+            {"charm_storpool_block_unit": sputils.MACHINE_ID}, self.lset_kwargs
+        )
 
         r_state.r_set_states(states)
 
@@ -216,18 +220,13 @@ class TestStorPoolBlock(unittest.TestCase):
         r_state.remove_state(PRESENCE_STATE)
         no_announce = r_state.r_get_states()
         self.assertNotEquals(do_announce, no_announce)
-        self.assertEquals(no_announce.union(set([PRESENCE_STATE])),
-                          do_announce)
+        self.assertEquals(
+            no_announce.union(set([PRESENCE_STATE])), do_announce
+        )
 
         sp_node = sputils.get_machine_id()
-        other_nodes = {
-            'not-' + sp_node: '17',
-            'neither-' + sp_node: '18',
-        }
-        with_ours = {
-            **other_nodes,
-            sp_node: '16',
-        }
+        other_nodes = {"not-" + sp_node: "17", "neither-" + sp_node: "18"}
+        with_ours = {**other_nodes, sp_node: "16"}
 
         # No change if our node is there.
         r_state.r_set_states(no_announce)
@@ -261,10 +260,11 @@ class TestStorPoolBlock(unittest.TestCase):
         self.do_test_hook_install(testee.upgrade_setup, True)
 
     @mock_reactive_states
-    @mock.patch('charmhelpers.core.hookenv.leader_set')
-    @mock.patch('charmhelpers.core.hookenv.is_leader')
-    def this_needs_work_test_hook_leader_elected(self, h_is_leader,
-                                                 h_leader_set):
+    @mock.patch("charmhelpers.core.hookenv.leader_set")
+    @mock.patch("charmhelpers.core.hookenv.is_leader")
+    def this_needs_work_test_hook_leader_elected(
+        self, h_is_leader, h_leader_set
+    ):
         """
         Test the possible false alarms when we would be the leader.
         """
@@ -278,8 +278,8 @@ class TestStorPoolBlock(unittest.TestCase):
         self.do_test_ensure_our_presence()
 
     @mock_reactive_states
-    @mock.patch('charmhelpers.core.hookenv.leader_set')
-    @mock.patch('charmhelpers.core.hookenv.is_leader')
+    @mock.patch("charmhelpers.core.hookenv.leader_set")
+    @mock.patch("charmhelpers.core.hookenv.is_leader")
     def this_needs_work_test_full_lifecycle(self, h_is_leader, h_leader_set):
         """
         Test the full lifecycle of the storpool-block charm.
