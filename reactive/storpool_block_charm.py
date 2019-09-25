@@ -159,7 +159,7 @@ def try_announce():
         reactive.remove_state("block-p.notify-joined")
         reactive.remove_state("storpool-presence.notify")
         reactive.remove_state("storpool-presence.notify-joined")
-    except Exception as e:
+    except Exception:  # FIXME: as err:
         raise  # FIXME: hookenv.log and then exit(42)?
 
 
