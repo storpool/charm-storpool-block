@@ -95,6 +95,12 @@ def start_service():
     run()
 
 
+@reactive.hook("post-series-upgrade")
+def post_series_upgrade():
+    """ Try to upgrade and start everything. """
+    run()
+
+
 @reactive.hook("leader-elected")
 def we_are_the_leader():
     """
