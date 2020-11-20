@@ -22,6 +22,7 @@ import os
 import platform
 import re
 import subprocess
+import tempfile
 
 from charms import reactive
 from charmhelpers.core import hookenv, host, unitdata
@@ -32,6 +33,7 @@ from spcharms import kvdata
 from spcharms import osi
 from spcharms import service_hook
 from spcharms import status as spstatus
+from spcharms import txn
 from spcharms import utils as sputils
 
 from spcharms.run import storpool_block as run_block
@@ -47,6 +49,15 @@ RE_SPDEV = re.compile(
     $""",
     re.X,
 )
+
+
+def block_conffile():
+    """
+    Return the name of the configuration file that will be generated for
+    the `storpool_block` service in order to also export the block devices
+    into the host's LXD containers.
+    """
+    return "/etc/storpool.conf.d/storpool-cinder-block.conf"
 
 
 def rdebug(s, cond=None):
@@ -621,6 +632,151 @@ class BlockMirrorMigrate:
         )
 
 
+def remove_block_conffile(confname):
+    """
+    Remove a previously-created storpool_block config file that
+    instructs it to expose devices to LXD containers.
+    """
+    rdebug(
+        "no Cinder LXD containers found, checking for "
+        "any previously stored configuration..."
+    )
+    removed = False
+    if os.path.isfile(confname):
+        rdebug(
+            "- yes, {confname} exists, removing it".format(confname=confname)
+        )
+        try:
+            os.unlink(confname)
+            removed = True
+        except Exception as e:
+            rdebug(
+                "could not remove {confname}: {e}".format(
+                    confname=confname, e=e
+                )
+            )
+    elif os.path.exists(confname):
+        rdebug(
+            "- well, {confname} exists, but it is not a file; "
+            "removing it anyway".format(confname=confname)
+        )
+        subprocess.call(["rm", "-rf", "--", confname])
+        removed = True
+    if removed:
+        rdebug(
+            "- let us try to restart the storpool_block service "
+            + "(it may not even have been started yet, so ignore errors)"
+        )
+        try:
+            if host.service_running("storpool_block"):
+                rdebug(
+                    "  - well, it does seem to be running, so "
+                    + "restarting it"
+                )
+                host.service_restart("storpool_block")
+            else:
+                rdebug("  - nah, it was not running at all indeed")
+        except Exception as e:
+            rdebug(
+                "  - could not restart the service, but "
+                "ignoring the error: {e}".format(e=e)
+            )
+
+
+def create_block_conffile(lxc_name, confname):
+    """
+    Create the storpool_block config snippet for the old-style
+    "mount each and every sp-* device within the container" behavior.
+    """
+    rdebug('found a Cinder container at "{name}"'.format(name=lxc_name))
+    try:
+        rdebug(
+            'about to record the name of the Cinder LXD - "{name}" - '
+            "into {confname}".format(name=lxc_name, confname=confname)
+        )
+        dirname = os.path.dirname(confname)
+        rdebug(
+            "- checking for the {dirname} directory".format(dirname=dirname)
+        )
+        if not os.path.isdir(dirname):
+            rdebug("  - nah, creating it")
+            os.mkdir(dirname, mode=0o755)
+
+        rdebug("- is the file there?")
+        okay = False
+        expected_contents = [
+            "[{node}]".format(node=platform.node()),
+            "SP_EXTRA_FS=lxd:{name}".format(name=lxc_name),
+        ]
+        if os.path.isfile(confname):
+            rdebug("  - yes, it is... but does it contain the right data?")
+            with open(confname, mode="r") as conffile:
+                contents = [line.rstrip() for line in conffile.readlines()]
+                if contents == expected_contents:
+                    rdebug("   - whee, it already does!")
+                    okay = True
+                else:
+                    rdebug("   - it does NOT: {lst}".format(lst=contents))
+        else:
+            rdebug("   - nah...")
+            if os.path.exists(confname):
+                rdebug("     - but it still exists?!")
+                subprocess.call(["rm", "-rf", "--", confname])
+                if os.path.exists(confname):
+                    rdebug(
+                        "     - could not remove it, so leaving it "
+                        "alone, I guess"
+                    )
+                    okay = True
+
+        if not okay:
+            rdebug(
+                "- about to recreate the {confname} file".format(
+                    confname=confname
+                )
+            )
+            with tempfile.NamedTemporaryFile(dir="/tmp", mode="w+t") as spconf:
+                print("\n".join(expected_contents), file=spconf)
+                spconf.flush()
+                txn.install(
+                    "-o",
+                    "root",
+                    "-g",
+                    "root",
+                    "-m",
+                    "644",
+                    "--",
+                    spconf.name,
+                    confname,
+                )
+            rdebug("- looks like we are done with it")
+            rdebug(
+                "- let us try to restart the storpool_block service "
+                "(it may not even have been started yet, so "
+                "ignore errors)"
+            )
+            try:
+                if host.service_running("storpool_block"):
+                    rdebug(
+                        "  - well, it does seem to be running, "
+                        "so restarting it"
+                    )
+                    host.service_restart("storpool_block")
+                else:
+                    rdebug("  - nah, it was not running at all indeed")
+            except Exception as e:
+                rdebug(
+                    "  - could not restart the service, but "
+                    "ignoring the error: {e}".format(e=e)
+                )
+    except Exception as e:
+        rdebug(
+            "could not check for and/or recreate the {confname} "
+            'storpool_block config file adapted the "{name}" '
+            "LXD container: {e}".format(confname=confname, name=lxc_name, e=e)
+        )
+
+
 @reactive.when("storpool-block-charm.lxd")
 def reconfigure_cinder_lxd():
     """
@@ -629,8 +785,10 @@ def reconfigure_cinder_lxd():
     rdebug("reconfigure_cinder_lxd() invoked")
     reactive.remove_state("storpool-block-charm.lxd")
     cinder_name = unitdata.kv().get(kvdata.KEY_LXD_NAME)
+    block_confname = block_conffile()
     if cinder_name is None or cinder_name == "":
         rdebug("no Cinder containers to tell storpool_block about")
+        remove_block_conffile(block_confname)
         return
     rdebug("- analyzing a machine name: {name}".format(name=cinder_name))
 
@@ -639,26 +797,22 @@ def reconfigure_cinder_lxd():
     rdebug("whee: migrate {migrate}".format(migrate=migrate))
     if migrate.done():
         rdebug("The mirror-dir migration seems to be complete")
-    elif migrate.unready():
-        rdebug("The mirror-dir migration cannot start yet")
-    else:
-        rdebug("Attempting the mirror-dir migration")
-        res = migrate.run()
-        rdebug("migrate.run() returned {res}".format(res=res))
+        return
 
-    obsolete = "/etc/storpool.conf.d/storpool-cinder-block.conf"
-    if os.path.exists(obsolete):
-        rdebug(
-            "- removing the obsolete {obsolete} file".format(obsolete=obsolete)
-        )
-        try:
-            os.unlink(obsolete)
-        except OSError as err:
-            rdebug(
-                "  - could not remove it: {etype}: {err}".format(
-                    etype=type(err).__name__, err=err
-                )
-            )
+    if migrate.container_config is None:
+        rdebug("No Cinder container running, no mirror-dir handling")
+        return
+
+    if migrate.storpool_mirror_dir is None:
+        rdebug("No mirror dir defined for storpool_block, using the old way")
+        create_block_conffile(migrate.container_config["name"], block_confname)
+        return
+
+    rdebug("Attempting the mirror-dir migration")
+    res = migrate.run()
+    rdebug("migrate.run() returned {res}".format(res=res))
+    if res:
+        remove_block_conffile(block_confname)
 
 
 def ready():
