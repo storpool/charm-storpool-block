@@ -1019,6 +1019,9 @@ def sp_status():
     try:
         status = get_status()
         hookenv.action_set({"status": json.dumps(status)})
+        spstatus.set(
+            "active" if status["ready"] else "maintenance", status["message"]
+        )
     except BaseException as e:
         s = "Querying the StorPool status: {e}".format(e=e)
         hookenv.log(s, hookenv.ERROR)
