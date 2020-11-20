@@ -54,6 +54,8 @@ BLOCK_CONFFILE = pathlib.Path(
     "/etc/storpool.conf.d/storpool-cinder-block.conf"
 )
 
+STORPOOL_CONFFILE = pathlib.Path("/etc/storpool.conf")
+
 
 def rdebug(s, cond=None):
     """
@@ -174,20 +176,32 @@ def try_announce():
         raise  # FIXME: hookenv.log and then exit(42)?
 
 
+def read_storpool_conf():
+    try:
+        return STORPOOL_CONFFILE.read_text(encoding="UTF-8")
+    except FileNotFoundError:
+        return None
+
+
 def build_presence(current):
     current["id"] = spconfig.get_our_id()
     current["hostname"] = platform.node()
 
     cfg = hookenv.config()
     keys = (
-        "storpool_conf",
         "storpool_repo_url",
         "storpool_version",
         "storpool_openstack_version",
     )
     missing = list(filter(lambda k: cfg.get(k) is None, keys))
+
+    contents = read_storpool_conf()
+    if contents is None:
+        missing.append("storpool_conf")
+
     if reactive.is_state("storpool-block-charm.leader") and not missing:
         current["config"] = {key: cfg[key] for key in keys}
+        current["config"]["storpool_conf"] = contents
 
 
 def announce_presence(force=False):
@@ -843,16 +857,8 @@ def run(reraise=False):
             ),
             hookenv.INFO,
         )
-    except sperror.StorPoolPackageInstallException as e_pkg:
-        hookenv.log(
-            "StorPool: could not install the {names} packages: {e}".format(
-                names=" ".join(e_pkg.names), e=e_pkg.cause
-            ),
-            hookenv.ERROR,
-        )
-        reraise_or_fail()
-    except sperror.StorPoolNoCGroupsException as e_cfg:
-        hookenv.log("StorPool: {e}".format(e=e_cfg), hookenv.ERROR)
+    except sperror.StorPoolMissingComponentsException as e_comp:
+        hookenv.log("StorPool: {e}".format(e=e_comp), hookenv.ERROR)
         reraise_or_fail()
     except sperror.StorPoolException as e:
         hookenv.log("StorPool installation problem: {e}".format(e=e))
@@ -866,7 +872,8 @@ def get_status():
     inst = reactive.is_state("storpool-block-charm.services-started")
     status = {
         "node": sputils.get_machine_id(),
-        "charm-config": hookenv.config(),
+        "charm-config": dict(hookenv.config()),
+        "storpool-conf": read_storpool_conf(),
         "installed": inst,
         "presence": service_hook.fetch_presence(RELATIONS),
         "lxd": unitdata.kv().get(kvdata.KEY_LXD_NAME),
@@ -877,7 +884,6 @@ def get_status():
         "storpool_repo_url",
         "storpool_version",
         "storpool_openstack_version",
-        "storpool_conf",
     ):
         value = status["charm-config"].get(name)
         if value is None or value == "":
