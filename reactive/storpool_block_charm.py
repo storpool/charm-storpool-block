@@ -820,7 +820,7 @@ def get_status():
         found = list(filter(lambda e: e["id"] == int_id, data["data"]))
         if not found:
             raise Exception(
-                "No client status reported for {our_id}".format(i=our_id)
+                "No client status reported for {our_id}".format(our_id=our_id)
             )
         state = found[0]["configStatus"]
         status["message"] = "StorPool client: {st}".format(st=state)
