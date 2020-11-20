@@ -18,7 +18,7 @@ Internal hooks:
 from __future__ import print_function
 
 import json
-import os
+import pathlib
 import platform
 import re
 import subprocess
@@ -50,14 +50,9 @@ RE_SPDEV = re.compile(
     re.X,
 )
 
-
-def block_conffile():
-    """
-    Return the name of the configuration file that will be generated for
-    the `storpool_block` service in order to also export the block devices
-    into the host's LXD containers.
-    """
-    return "/etc/storpool.conf.d/storpool-cinder-block.conf"
+BLOCK_CONFFILE = pathlib.Path(
+    "/etc/storpool.conf.d/storpool-cinder-block.conf"
+)
 
 
 def rdebug(s, cond=None):
@@ -642,12 +637,12 @@ def remove_block_conffile(confname):
         "any previously stored configuration..."
     )
     removed = False
-    if os.path.isfile(confname):
+    if confname.is_file():
         rdebug(
             "- yes, {confname} exists, removing it".format(confname=confname)
         )
         try:
-            os.unlink(confname)
+            confname.unlink()
             removed = True
         except Exception as e:
             rdebug(
@@ -655,12 +650,12 @@ def remove_block_conffile(confname):
                     confname=confname, e=e
                 )
             )
-    elif os.path.exists(confname):
+    elif confname.exists():
         rdebug(
             "- well, {confname} exists, but it is not a file; "
             "removing it anyway".format(confname=confname)
         )
-        subprocess.call(["rm", "-rf", "--", confname])
+        subprocess.call(["rm", "-rf", "--", str(confname)])
         removed = True
     if removed:
         rdebug(
@@ -694,13 +689,13 @@ def create_block_conffile(lxc_name, confname):
             'about to record the name of the Cinder LXD - "{name}" - '
             "into {confname}".format(name=lxc_name, confname=confname)
         )
-        dirname = os.path.dirname(confname)
+        dirname = confname.parent
         rdebug(
             "- checking for the {dirname} directory".format(dirname=dirname)
         )
-        if not os.path.isdir(dirname):
+        if not dirname.is_dir():
             rdebug("  - nah, creating it")
-            os.mkdir(dirname, mode=0o755)
+            dirname.mkdir(mode=0o755)
 
         rdebug("- is the file there?")
         okay = False
@@ -708,21 +703,20 @@ def create_block_conffile(lxc_name, confname):
             "[{node}]".format(node=platform.node()),
             "SP_EXTRA_FS=lxd:{name}".format(name=lxc_name),
         ]
-        if os.path.isfile(confname):
+        if confname.is_file():
             rdebug("  - yes, it is... but does it contain the right data?")
-            with open(confname, mode="r") as conffile:
-                contents = [line.rstrip() for line in conffile.readlines()]
-                if contents == expected_contents:
-                    rdebug("   - whee, it already does!")
-                    okay = True
-                else:
-                    rdebug("   - it does NOT: {lst}".format(lst=contents))
+            contents = confname.read_text(encoding="ISO-8859-15").splitlines()
+            if contents == expected_contents:
+                rdebug("   - whee, it already does!")
+                okay = True
+            else:
+                rdebug("   - it does NOT: {lst}".format(lst=contents))
         else:
             rdebug("   - nah...")
-            if os.path.exists(confname):
+            if confname.exists():
                 rdebug("     - but it still exists?!")
-                subprocess.call(["rm", "-rf", "--", confname])
-                if os.path.exists(confname):
+                subprocess.call(["rm", "-rf", "--", str(confname)])
+                if confname.exists():
                     rdebug(
                         "     - could not remove it, so leaving it "
                         "alone, I guess"
@@ -747,7 +741,7 @@ def create_block_conffile(lxc_name, confname):
                     "644",
                     "--",
                     spconf.name,
-                    confname,
+                    str(confname),
                 )
             rdebug("- looks like we are done with it")
             rdebug(
@@ -785,7 +779,7 @@ def reconfigure_cinder_lxd():
     rdebug("reconfigure_cinder_lxd() invoked")
     reactive.remove_state("storpool-block-charm.lxd")
     cinder_name = unitdata.kv().get(kvdata.KEY_LXD_NAME)
-    block_confname = block_conffile()
+    block_confname = BLOCK_CONFFILE
     if cinder_name is None or cinder_name == "":
         rdebug("no Cinder containers to tell storpool_block about")
         remove_block_conffile(block_confname)
@@ -919,11 +913,11 @@ def get_status():
 
     if found:
         spstatus.set("maintenance", "checking for the spool directory")
-        dirname = "/var/spool/openstack-storpool"
-        if not os.path.isdir(dirname):
+        dirname = pathlib.Path("/var/spool/openstack-storpool")
+        if not dirname.is_dir():
             status["message"] = "No {d} directory".format(d=dirname)
             return status
-        st = os.stat(dirname)
+        st = dirname.stat()
         if not st.st_mode & 0o0020:
             status["message"] = "{d} not group-writable".format(d=dirname)
             return status
