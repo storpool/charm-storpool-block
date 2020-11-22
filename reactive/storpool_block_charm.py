@@ -27,13 +27,11 @@ import tempfile
 from charms import reactive
 from charmhelpers.core import hookenv, host, unitdata
 
-from spcharms import config as spconfig
 from spcharms import error as sperror
 from spcharms import kvdata
 from spcharms import osi
 from spcharms import service_hook
 from spcharms import status as spstatus
-from spcharms import txn
 from spcharms import utils as sputils
 
 from spcharms.run import storpool_block as run_block
@@ -70,7 +68,6 @@ def install_setup():
     Note that the storpool-repo-add layer should reset the status error
     messages on "config-changed" and "upgrade-charm" hooks.
     """
-    spconfig.set_meta_config(None)
     spstatus.set_status_reset_handler("storpool-repo-add")
     run()
 
@@ -82,7 +79,6 @@ def config_changed():
     """
     if reactive.is_state("storpool-block-charm.leader"):
         reactive.set_state("storpool-block-charm.bump-generation")
-    spconfig.set_meta_config(None)
     run()
 
 
@@ -91,7 +87,6 @@ def upgrade_setup():
     """
     Try to (re-)install everything and re-announce.
     """
-    spconfig.set_meta_config(None)
     run()
 
 
@@ -183,32 +178,10 @@ def read_storpool_conf():
         return None
 
 
-def build_presence(current):
-    current["id"] = spconfig.get_our_id()
-    current["hostname"] = platform.node()
-
-    cfg = hookenv.config()
-    keys = (
-        "storpool_repo_url",
-        "storpool_version",
-        "storpool_openstack_version",
-    )
-    missing = list(filter(lambda k: cfg.get(k) is None, keys))
-
-    contents = read_storpool_conf()
-    if contents is None:
-        missing.append("storpool_conf")
-
-    if reactive.is_state("storpool-block-charm.leader") and not missing:
-        current["config"] = {key: cfg[key] for key in keys}
-        current["config"]["storpool_conf"] = contents
-
-
 def announce_presence(force=False):
     data = service_hook.fetch_presence(RELATIONS)
 
     mach_id = "block:" + sputils.get_machine_id()
-    our_node = data["nodes"].get(mach_id)
 
     announce = force
     block_joined = reactive.is_state("block-p.notify-joined")
@@ -225,8 +198,7 @@ def announce_presence(force=False):
         announce = True
 
     if announce:
-        our_node = {"generation": generation}
-        build_presence(our_node)
+        our_node = {"generation": generation, "hostname": platform.node()}
         ndata = {"generation": generation, "nodes": {mach_id: our_node}}
         rdebug("announcing {data}".format(data=ndata), cond="announce")
         service_hook.send_presence(ndata, RELATIONS)
@@ -746,16 +718,20 @@ def create_block_conffile(lxc_name, confname):
             with tempfile.NamedTemporaryFile(dir="/tmp", mode="w+t") as spconf:
                 print("\n".join(expected_contents), file=spconf)
                 spconf.flush()
-                txn.install(
-                    "-o",
-                    "root",
-                    "-g",
-                    "root",
-                    "-m",
-                    "644",
-                    "--",
-                    spconf.name,
-                    str(confname),
+                subprocess.check_call(
+                    [
+                        "install",
+                        "-o",
+                        "root",
+                        "-g",
+                        "root",
+                        "-m",
+                        "644",
+                        "--",
+                        spconf.name,
+                        str(confname),
+                    ],
+                    shell=False,
                 )
             rdebug("- looks like we are done with it")
             rdebug(
