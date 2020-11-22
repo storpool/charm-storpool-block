@@ -199,6 +199,14 @@ def announce_presence(force=False):
 
     if announce:
         our_node = {"generation": generation, "hostname": platform.node()}
+        if reactive.is_state("storpool-block-charm.leader"):
+            our_node["config"] = {
+                "storpool_repo_url": "",
+                "storpool_version": "",
+                "storpool_openstack_version": "",
+                "storpool_conf": "",
+            }
+
         ndata = {"generation": generation, "nodes": {mach_id: our_node}}
         rdebug("announcing {data}".format(data=ndata), cond="announce")
         service_hook.send_presence(ndata, RELATIONS)
